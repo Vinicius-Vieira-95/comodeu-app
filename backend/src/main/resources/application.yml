@@ -1,21 +1,19 @@
+# Configuração comum a todos os perfis.
+# Perfis:
+#   dev  (padrão) -> application-dev.yml  : H2 em memória
+#   prod          -> application-prod.yml : PostgreSQL
+# Para usar prod: SPRING_PROFILES_ACTIVE=prod  ou  --spring.profiles.active=prod
 spring:
   application:
     name: como-deu-api
 
+  profiles:
+    default: dev  # usado só quando nenhum perfil é informado
+
   jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/como_deu
-    username: postgres
-    password: postgres
-    driver-class-name: org.postgresql.Driver
 
   servlet:
     multipart:
@@ -23,15 +21,9 @@ spring:
       max-request-size: 10MB
 
 server:
-  port: 8080
+  port: ${PORT:8080}
   servlet:
     context-path: /api
 
 jwt:
-  secret: sua-chave-secreta-muito-segura-aqui-change-in-production
   expiration: 86400000  # 24 horas em ms
-
-logging:
-  level:
-    root: INFO
-    com.comodeu: DEBUG

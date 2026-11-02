@@ -1,12 +1,11 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.3.4'
-    id 'io.spring.dependency-management' version '1.1.4'
+    id 'org.springframework.boot' version '3.5.7'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'com.comodeu'
 version = '1.0.0'
-sourceCompatibility = '25'
 
 repositories {
     mavenCentral()
@@ -23,8 +22,8 @@ dependencies {
     runtimeOnly 'com.h2database:h2'
 
     // Lombok (para reduzir boilerplate)
-    compileOnly 'org.projectlombok:lombok:1.18.30'
-    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     // JSON
     implementation 'com.fasterxml.jackson.core:jackson-databind'
@@ -34,6 +33,9 @@ dependencies {
     implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+
+    // Documentação da API (Swagger UI / OpenAPI)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
 
     // File upload
     implementation 'commons-io:commons-io:2.11.0'
@@ -48,6 +50,7 @@ tasks.named('test') {
 }
 
 java {
-    sourceCompatibility = '25'
-    targetCompatibility = '25'
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
 }

@@ -1,0 +1,45 @@
+# ===== Sistema / IDEs =====
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.vscode/
+*.swp
+*.log
+
+# ===== Variáveis de ambiente / segredos =====
+.env
+.env.*
+!.env.example
+
+# ===== Backend (Java / Gradle / Spring Boot) =====
+backend/.gradle/
+backend/build/
+backend/bin/
+!backend/gradle/wrapper/gradle-wrapper.jar
+backend/HELP.md
+
+# ===== Frontend (Flutter / Dart) =====
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/.pub-cache/
+frontend/.pub/
+frontend/build/
+frontend/coverage/
+frontend/**/Flutter/ephemeral/
+frontend/**/GeneratedPluginRegistrant.*
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/android/key.properties
+frontend/android/**/*.keystore
+frontend/android/**/*.jks
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/ios/Flutter/Generated.xcconfig
+frontend/ios/Flutter/flutter_export_environment.sh

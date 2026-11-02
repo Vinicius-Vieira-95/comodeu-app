@@ -30,5 +30,6 @@ public class ComoItem {
     private String keywords;  // Separado por vírgula para sugestão automática
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean active = true;
 }

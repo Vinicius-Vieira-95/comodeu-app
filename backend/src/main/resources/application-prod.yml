@@ -1,0 +1,46 @@
+# Perfil de produção: PostgreSQL.
+# Variáveis de ambiente:
+#   DB_URL       (padrão: jdbc:postgresql://localhost:5432/como_deu)
+#   DB_USERNAME  (padrão: postgres)
+#   DB_PASSWORD  (obrigatória)
+#   JWT_SECRET   (obrigatória)
+#   CORS_ALLOWED_ORIGINS (origens do Flutter Web, separadas por vírgula)
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/como_deu}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  h2:
+    console:
+      enabled: false
+
+# Swagger desligado em produção (habilite com SWAGGER_ENABLED=true se precisar)
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+
+# CORS: origens do Flutter Web em produção, separadas por vírgula (ex.: https://comodeu.app)
+# Sem a variável, nenhuma origem de navegador é liberada.
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+jwt:
+  secret: ${JWT_SECRET}
+
+logging:
+  level:
+    root: INFO
+    com.comodeu: INFO

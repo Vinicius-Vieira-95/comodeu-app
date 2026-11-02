@@ -1,0 +1,41 @@
+# Perfil de desenvolvimento: H2 em memória (não precisa de PostgreSQL).
+# Os dados são perdidos ao parar a aplicação.
+# Console: http://localhost:8080/api/h2-console  (JDBC URL: jdbc:h2:mem:como_deu, usuário: sa, senha vazia)
+spring:
+  datasource:
+    url: jdbc:h2:mem:como_deu;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # Login padrão do Spring Security (só no dev; substitui a senha gerada a cada start)
+  security:
+    user:
+      name: admin
+      password: admin
+
+# CORS: Flutter Web em qualquer porta local (flutter run -d chrome usa porta aleatória)
+app:
+  cors:
+    allowed-origins: http://localhost:*,http://127.0.0.1:*
+
+jwt:
+  secret: chave-secreta-dev-vini-1234456
+
+logging:
+  level:
+    root: INFO
+    com.comodeu: DEBUG

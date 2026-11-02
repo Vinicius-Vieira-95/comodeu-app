@@ -13,9 +13,6 @@ public class ComoDeUApiApplication {
         SpringApplication.run(ComoDeUApiApplication.class, args);
     }
 
-    /**
-     * Inicializa os itens COMO D'EU ao iniciar a aplicação
-     */
     @Bean
     public CommandLineRunner init(ComoItemService comoItemService) {
         return args -> {

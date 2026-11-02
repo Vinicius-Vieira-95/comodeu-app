@@ -7,10 +7,21 @@ import '../models/como_item.dart';
 class ApiService {
   static const String baseUrl = 'http://localhost:8080/api';
 
-  // Headers padrão
-  static const Map<String, String> headers = {
+  // Login provisório (HTTP Basic) até a autenticação JWT ser implementada.
+  // Padrão: usuário do perfil dev do backend (admin / admin).
+  // Para trocar sem mexer no código:
+  //   flutter run --dart-define=API_USER=fulano --dart-define=API_PASSWORD=segredo
+  static const String _apiUser =
+      String.fromEnvironment('API_USER', defaultValue: 'admin');
+  static const String _apiPassword =
+      String.fromEnvironment('API_PASSWORD', defaultValue: 'admin');
+
+  // Headers padrão (incluem o login em todas as requisições)
+  static final Map<String, String> headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'Authorization':
+        'Basic ${base64Encode(utf8.encode('$_apiUser:$_apiPassword'))}',
   };
 
   // EVALUATION ENDPOINTS

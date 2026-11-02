@@ -21,19 +21,21 @@ spring:
       enabled: true
       path: /h2-console
 
-  # Login padrão do Spring Security (só no dev; substitui a senha gerada a cada start)
-  security:
-    user:
-      name: admin
-      password: admin
-
-# CORS: Flutter Web em qualquer porta local (flutter run -d chrome usa porta aleatória)
 app:
+  # CORS: Flutter Web em qualquer porta local (flutter run -d chrome usa porta aleatória)
   cors:
     allowed-origins: http://localhost:*,http://127.0.0.1:*
 
+  # Usuário ADMIN criado automaticamente a cada start (DevUserSeeder)
+  # Login: POST /api/auth/login  {"email": "admin@comodeu.dev", "password": "admin123"}
+  dev-user:
+    name: Administrador
+    email: admin@comodeu.dev
+    password: admin123
+
 jwt:
-  secret: chave-secreta-dev-vini-1234456
+  # Mínimo de 32 bytes (HS256)
+  secret: heN5tq0GN0T0BEPdNd1q1IYbQANRmqPRCcxxzj2sLFMJEChOw4JHm8pYs61o1NKg
 
 logging:
   level:

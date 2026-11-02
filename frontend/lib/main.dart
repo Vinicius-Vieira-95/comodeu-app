@@ -1,16 +1,35 @@
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/api_service.dart';
 
-void main() {
-  runApp(const ComoDeUApp());
+/// Permite navegar para o login de fora de um widget (ex.: token expirado).
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final loggedIn = await ApiService.loadSession();
+
+  // Se a API recusar o token (expirado/inválido), volta para o login.
+  ApiService.onUnauthorized = () {
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  };
+
+  runApp(ComoDeUApp(loggedIn: loggedIn));
 }
 
 class ComoDeUApp extends StatelessWidget {
-  const ComoDeUApp({Key? key}) : super(key: key);
+  final bool loggedIn;
+
+  const ComoDeUApp({Key? key, required this.loggedIn}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Avaliador COMO D\'EU',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -33,7 +52,7 @@ class ComoDeUApp extends StatelessWidget {
         ),
       ),
       themeMode: ThemeMode.system,
-      home: const HomeScreen(),
+      home: loggedIn ? const HomeScreen() : const LoginScreen(),
     );
   }
 }

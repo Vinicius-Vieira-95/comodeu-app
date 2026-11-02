@@ -17,8 +17,9 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
  * Como o Spring Security ignora essas rotas, o header X-Frame-Options
  * também não é aplicado, permitindo os frames do console do H2.
  *
- * As chamadas feitas pelo Swagger ("Try it out") continuam exigindo login:
- * use o botão "Authorize" com o usuário do dev (admin / admin).
+ * As chamadas feitas pelo Swagger ("Try it out") continuam exigindo token:
+ * faça POST /auth/login (admin@comodeu.dev / admin123), copie o token e
+ * cole no botão "Authorize".
  */
 @Configuration
 @Profile("dev")

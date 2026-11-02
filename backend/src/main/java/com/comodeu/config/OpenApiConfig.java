@@ -14,14 +14,14 @@ import org.springframework.context.annotation.Configuration;
  * Swagger UI: http://localhost:8080/api/swagger-ui.html
  * JSON:       http://localhost:8080/api/v3/api-docs
  *
- * O esquema "basicAuth" habilita o botão "Authorize" do Swagger UI.
- * Quando a autenticação JWT for implementada, troque por um esquema
- * HTTP "bearer" com bearerFormat "JWT".
+ * Autenticação JWT no Swagger UI:
+ *  1. POST /auth/login e copie o "token" da resposta
+ *  2. Clique em "Authorize" e cole só o token (sem "Bearer ")
  */
 @Configuration
 public class OpenApiConfig {
 
-    private static final String SECURITY_SCHEME = "basicAuth";
+    private static final String SECURITY_SCHEME = "bearerAuth";
 
     @Bean
     public OpenAPI comoDeUOpenApi() {
@@ -33,7 +33,8 @@ public class OpenApiConfig {
                 .components(new Components()
                         .addSecuritySchemes(SECURITY_SCHEME, new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)
-                                .scheme("basic")))
+                                .scheme("bearer")
+                                .bearerFormat("JWT")))
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME));
     }
 }

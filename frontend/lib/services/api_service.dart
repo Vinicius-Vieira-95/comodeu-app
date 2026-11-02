@@ -1,28 +1,145 @@
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/evaluation.dart';
 import '../models/evidence.dart';
 import '../models/como_item.dart';
 
+/// Erro de autenticação (login inválido, e-mail já cadastrado, dados inválidos).
+/// A [message] já vem pronta para mostrar ao usuário.
+class AuthException implements Exception {
+  final String message;
+  AuthException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Cliente HTTP que envia o token JWT em toda requisição e, se a API
+/// responder 401 (token expirado/inválido), encerra a sessão.
+class _AuthClient extends http.BaseClient {
+  final http.Client _inner = http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final token = ApiService.token;
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+    final response = await _inner.send(request);
+    if (response.statusCode == 401) {
+      await ApiService.logout();
+      ApiService.onUnauthorized?.call();
+    }
+    return response;
+  }
+}
+
 class ApiService {
   static const String baseUrl = 'http://localhost:8080/api';
 
-  // Login provisório (HTTP Basic) até a autenticação JWT ser implementada.
-  // Padrão: usuário do perfil dev do backend (admin / admin).
-  // Para trocar sem mexer no código:
-  //   flutter run --dart-define=API_USER=fulano --dart-define=API_PASSWORD=segredo
-  static const String _apiUser =
-      String.fromEnvironment('API_USER', defaultValue: 'admin');
-  static const String _apiPassword =
-      String.fromEnvironment('API_PASSWORD', defaultValue: 'admin');
+  static const String _tokenKey = 'auth_token';
+  static const String _userNameKey = 'auth_user_name';
 
-  // Headers padrão (incluem o login em todas as requisições)
-  static final Map<String, String> headers = {
+  static final http.Client _client = _AuthClient();
+
+  /// Token JWT da sessão atual (null = não logado).
+  static String? token;
+
+  /// Nome do usuário logado (para exibir na tela).
+  static String? userName;
+
+  /// Chamado quando a API recusa o token (401). O app usa para voltar ao login.
+  static void Function()? onUnauthorized;
+
+  // Headers padrão (o token é adicionado pelo _AuthClient)
+  static const Map<String, String> headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Authorization':
-        'Basic ${base64Encode(utf8.encode('$_apiUser:$_apiPassword'))}',
   };
+
+  static bool get isLoggedIn => token != null;
+
+  // AUTH ENDPOINTS
+
+  /// Carrega o token salvo no aparelho. Chamar uma vez ao abrir o app.
+  static Future<bool> loadSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    token = prefs.getString(_tokenKey);
+    userName = prefs.getString(_userNameKey);
+    return isLoggedIn;
+  }
+
+  static Future<void> login({
+    required String email,
+    required String password,
+  }) async {
+    await _authenticate('/auth/login', {
+      'email': email,
+      'password': password,
+    });
+  }
+
+  static Future<void> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    await _authenticate('/auth/register', {
+      'name': name,
+      'email': email,
+      'password': password,
+    });
+  }
+
+  static Future<void> logout() async {
+    token = null;
+    userName = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_userNameKey);
+  }
+
+  static Future<void> _authenticate(String path, Map<String, String> body) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$baseUrl$path'),
+        headers: headers,
+        body: jsonEncode(body),
+      );
+    } catch (e) {
+      throw AuthException('Não foi possível conectar com o servidor');
+    }
+
+    // utf8.decode: a API não envia charset, e response.body decodificaria como Latin-1 (acentos quebrados).
+    dynamic data;
+    try {
+      data = response.bodyBytes.isEmpty ? null : jsonDecode(utf8.decode(response.bodyBytes));
+    } catch (_) {
+      data = null;
+    }
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      token = data['token'] as String;
+      userName = data['user']?['name'] as String?;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_tokenKey, token!);
+      if (userName != null) {
+        await prefs.setString(_userNameKey, userName!);
+      }
+      return;
+    }
+
+    // 400: {"error": "...", "fields": {"campo": "mensagem"}}  |  401/409: {"error": "..."}
+    if (data is Map && data['fields'] is Map && (data['fields'] as Map).isNotEmpty) {
+      throw AuthException((data['fields'] as Map).values.join('\n'));
+    }
+    if (data is Map && data['error'] is String) {
+      throw AuthException(data['error'] as String);
+    }
+    throw AuthException('Erro inesperado (${response.statusCode})');
+  }
 
   // EVALUATION ENDPOINTS
 
@@ -32,7 +149,7 @@ class ApiService {
     required String spaceType,
   }) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/evaluations'),
         headers: headers,
         body: jsonEncode({
@@ -54,7 +171,7 @@ class ApiService {
 
   static Future<Evaluation> getEvaluation(int id) async {
     try {
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/evaluations/$id'),
         headers: headers,
       );
@@ -71,7 +188,7 @@ class ApiService {
 
   static Future<List<Evaluation>> getAllEvaluations() async {
     try {
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/evaluations'),
         headers: headers,
       );
@@ -97,7 +214,7 @@ class ApiService {
     required String quickNote,
   }) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/evidences'),
         headers: headers,
         body: jsonEncode({
@@ -121,7 +238,7 @@ class ApiService {
 
   static Future<List<Evidence>> getEvidencesByEvaluation(int evaluationId) async {
     try {
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/evidences/evaluation/$evaluationId'),
         headers: headers,
       );
@@ -141,7 +258,7 @@ class ApiService {
 
   static Future<List<ComoItem>> getAllComoItems() async {
     try {
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/como-items'),
         headers: headers,
       );
@@ -159,7 +276,7 @@ class ApiService {
 
   static Future<List<ComoItem>> suggestComoItems(String quickNote) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/como-items/suggest'),
         headers: headers,
         body: jsonEncode({
@@ -186,7 +303,7 @@ class ApiService {
     required String personalAnalysis,
   }) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/classifications'),
         headers: headers,
         body: jsonEncode({

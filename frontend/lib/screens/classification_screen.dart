@@ -20,7 +20,8 @@ class ClassificationScreen extends StatefulWidget {
 }
 
 class _ClassificationScreenState extends State<ClassificationScreen> {
-  late Future<List<ComoItem>> futureSuggestions;
+  /// [0] = sugestões pela nota, [1] = todos os itens COMO D'EU.
+  late Future<List<List<ComoItem>>> futureItems;
   final _analysisController = TextEditingController();
   final Set<int> _selectedItemIds = {};
   bool _isLoading = false;
@@ -28,7 +29,35 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
   @override
   void initState() {
     super.initState();
-    futureSuggestions = ApiService.suggestComoItems(widget.evidence.quickNote);
+    futureItems = _loadItems();
+  }
+
+  Future<List<List<ComoItem>>> _loadItems() async {
+    // Sugestão é opcional: se falhar, o usuário ainda escolhe na lista completa.
+    final suggestions = await ApiService.suggestComoItems(widget.evidence.quickNote)
+        .catchError((_) => <ComoItem>[]);
+    final all = await ApiService.getAllComoItems();
+    return [suggestions, all];
+  }
+
+  Widget _itemTile(ComoItem item, {bool suggested = false}) {
+    final isSelected = _selectedItemIds.contains(item.id);
+    return CheckboxListTile(
+      value: isSelected,
+      onChanged: (value) {
+        setState(() {
+          if (value == true) {
+            _selectedItemIds.add(item.id);
+          } else {
+            _selectedItemIds.remove(item.id);
+          }
+        });
+      },
+      title: Text('${item.itemNumber}. ${item.name}'),
+      subtitle: Text(item.description),
+      secondary: suggested ? const Icon(Icons.auto_awesome, color: Colors.amber) : null,
+      selected: isSelected,
+    );
   }
 
   @override
@@ -38,7 +67,7 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
   }
 
   Future<void> _saveClassifications() async {
-    if (_selectedItemIds.isEmpty || _analysisController.text.isEmpty) {
+    if (_selectedItemIds.isEmpty || _analysisController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecione itens e escreva sua análise')),
       );
@@ -54,7 +83,7 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
         await ApiService.createClassification(
           evidenceId: widget.evidence.id!,
           comoItemId: itemId,
-          personalAnalysis: _analysisController.text,
+          personalAnalysis: _analysisController.text.trim(),
         );
       }
 
@@ -66,13 +95,13 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
 
       Navigator.pop(context, true);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $e')),
-      );
-    } finally {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro: $e')),
+      );
     }
   }
 
@@ -124,42 +153,45 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            // Sugestões
-            const Text(
-              'Itens Sugeridos',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            FutureBuilder<List<ComoItem>>(
-              future: futureSuggestions,
+            // Itens: sugeridos primeiro, depois a lista completa
+            FutureBuilder<List<List<ComoItem>>>(
+              future: futureItems,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Text('Nenhuma sugestão disponível');
-                } else {
-                  final items = snapshot.data!;
+                }
+                if (snapshot.hasError) {
                   return Column(
-                    children: items.map((item) {
-                      final isSelected = _selectedItemIds.contains(item.id);
-                      return CheckboxListTile(
-                        value: isSelected,
-                        onChanged: (value) {
-                          setState(() {
-                            if (value == true) {
-                              _selectedItemIds.add(item.id);
-                            } else {
-                              _selectedItemIds.remove(item.id);
-                            }
-                          });
-                        },
-                        title: Text(item.name),
-                        subtitle: Text(item.description),
-                        selected: isSelected,
-                      );
-                    }).toList(),
+                    children: [
+                      Text('Erro ao carregar itens: ${snapshot.error}'),
+                      TextButton(
+                        onPressed: () => setState(() => futureItems = _loadItems()),
+                        child: const Text('Tentar novamente'),
+                      ),
+                    ],
                   );
                 }
+                final suggestions = snapshot.data![0];
+                final suggestedIds = suggestions.map((i) => i.id).toSet();
+                final others =
+                    snapshot.data![1].where((i) => !suggestedIds.contains(i.id)).toList();
+                const titleStyle = TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Itens Sugeridos', style: titleStyle),
+                    const SizedBox(height: 8),
+                    if (suggestions.isEmpty)
+                      const Text('Nenhuma sugestão para esta nota. Escolha na lista abaixo.')
+                    else
+                      ...suggestions.map((i) => _itemTile(i, suggested: true)),
+                    const SizedBox(height: 16),
+                    const Text('Todos os Itens COMO D\'EU', style: titleStyle),
+                    const SizedBox(height: 8),
+                    ...others.map(_itemTile),
+                  ],
+                );
               },
             ),
             const SizedBox(height: 20),

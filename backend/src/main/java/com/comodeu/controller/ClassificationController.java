@@ -3,6 +3,7 @@ package com.comodeu.controller;
 import com.comodeu.entity.Classification;
 import com.comodeu.repository.ClassificationRepository;
 import com.comodeu.repository.ComoItemRepository;
+import com.comodeu.service.EvidenceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ public class ClassificationController {
 
     private final ClassificationRepository classificationRepository;
     private final ComoItemRepository comoItemRepository;
+    private final EvidenceService evidenceService;
 
     @PostMapping
     public ResponseEntity<Classification> createClassification(
@@ -30,6 +32,9 @@ public class ClassificationController {
         // Validar que o item existe
         comoItemRepository.findById(comoItemId)
                 .orElseThrow(() -> new RuntimeException("Item COMO D'EU não encontrado"));
+
+        // Valida que a evidência existe e marca como classificada
+        evidenceService.classifyEvidence(evidenceId);
 
         Classification classification = Classification.builder()
                 .evidenceId(evidenceId)

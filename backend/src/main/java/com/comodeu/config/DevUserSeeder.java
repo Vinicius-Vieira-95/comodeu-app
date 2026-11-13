@@ -11,7 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
- * Cria um usuário ADMIN ao subir no perfil "dev" (o H2 começa vazio a cada start).
+ * Cria um usuário ADMIN ao subir no perfil "dev", caso ele ainda não exista no banco.
  * Credenciais em app.dev-user.* no application-dev.yml.
  */
 @Slf4j

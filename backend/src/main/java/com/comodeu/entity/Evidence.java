@@ -19,7 +19,8 @@ public class Evidence {
     @Column(nullable = false)
     private Long evaluationId;  // Foreign key para Evaluation
 
-    @Lob
+    // Sem @Lob: no PostgreSQL o @Lob grava como large object (oid/bigint),
+    // incompatível com a coluna BYTEA.
     @Column(columnDefinition = "BYTEA")
     private byte[] photoData;  // Foto em base64 ou arquivo
 

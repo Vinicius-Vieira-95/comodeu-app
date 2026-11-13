@@ -20,10 +20,6 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
-  h2:
-    console:
-      enabled: false
-
 # Swagger desligado em produção (habilite com SWAGGER_ENABLED=true se precisar)
 springdoc:
   api-docs:

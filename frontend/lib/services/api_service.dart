@@ -277,8 +277,9 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => ComoItem.fromJson(json)).toList();
+        List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
+        return data.map((json) => ComoItem.fromJson(json)).toList()
+          ..sort((a, b) => a.itemNumber.compareTo(b.itemNumber));
       } else {
         throw Exception('Erro ao buscar itens COMO D\'EU');
       }
@@ -298,7 +299,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        List<dynamic> data = jsonDecode(response.body);
+        List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         return data.map((json) => ComoItem.fromJson(json)).toList();
       } else {
         return [];
@@ -310,13 +311,14 @@ class ApiService {
 
   // CLASSIFICATIONS ENDPOINTS
 
-  static Future<bool> createClassification({
+  static Future<void> createClassification({
     required int evidenceId,
     required int comoItemId,
     required String personalAnalysis,
   }) async {
+    final http.Response response;
     try {
-      final response = await _client.post(
+      response = await _client.post(
         Uri.parse('$baseUrl/classifications'),
         headers: headers,
         body: jsonEncode({
@@ -325,10 +327,12 @@ class ApiService {
           'personalAnalysis': personalAnalysis,
         }),
       );
-
-      return response.statusCode == 201;
     } catch (e) {
-      throw Exception('Erro ao classificar evidência: $e');
+      throw Exception('Não foi possível conectar com o servidor');
+    }
+
+    if (response.statusCode != 201) {
+      throw Exception('O servidor recusou a classificação (${response.statusCode})');
     }
   }
 }

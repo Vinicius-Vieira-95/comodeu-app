@@ -1,25 +1,24 @@
-# Perfil de desenvolvimento: H2 em memória (não precisa de PostgreSQL).
-# Os dados são perdidos ao parar a aplicação.
-# Console: http://localhost:8080/api/h2-console  (JDBC URL: jdbc:h2:mem:como_deu, usuário: sa, senha vazia)
+# Perfil de desenvolvimento: PostgreSQL local.
+# Os dados são mantidos entre reinícios (ddl-auto: update cria/atualiza as tabelas).
+# Pré-requisito: PostgreSQL rodando e o banco criado (CREATE DATABASE comodeu;).
+# Variáveis de ambiente opcionais:
+#   DB_URL       (padrão: jdbc:postgresql://localhost:5432/comodeu)
+#   DB_USERNAME  (padrão: postgres)
+#   DB_PASSWORD  (padrão: postgres)
 spring:
   datasource:
-    url: jdbc:h2:mem:como_deu;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/comodeu}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
-
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
 app:
   # CORS: Flutter Web em qualquer porta local (flutter run -d chrome usa porta aleatória)

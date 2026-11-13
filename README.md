@@ -49,7 +49,7 @@ como-deu-app/
    ```
 
 3. **Escolher o perfil**
-   - `dev` (padrão): usa H2 em memória, não precisa de PostgreSQL nem de variáveis.
+   - `dev` (padrão): usa o PostgreSQL local (`jdbc:postgresql://localhost:5432/comodeu`, usuário `postgres`, senha `postgres`). Para outros valores, defina `DB_URL`, `DB_USERNAME` e `DB_PASSWORD`.
    - `prod`: usa PostgreSQL e exige estas variáveis de ambiente:
      ```powershell
      $env:SPRING_PROFILES_ACTIVE = "prod"

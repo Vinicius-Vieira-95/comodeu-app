@@ -31,7 +31,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - CSRF desligado e stateless: não há sessão nem cookie, a autenticação vai no header.
  * - CORS: origens permitidas definidas em {@link CorsConfig}.
  *
- * As rotas liberadas só no dev (H2 console, Swagger) ficam em {@link DevSecurityConfig}.
+ * As rotas liberadas só no dev (Swagger) ficam em {@link DevSecurityConfig}.
  */
 @Configuration
 @EnableWebSecurity

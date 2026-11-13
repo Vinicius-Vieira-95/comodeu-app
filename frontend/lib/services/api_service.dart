@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -36,7 +37,19 @@ class _AuthClient extends http.BaseClient {
 }
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:8080/api';
+  /// URL da API. Pode ser sobrescrita com
+  /// `flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8080/api`.
+  /// Padrão: no emulador Android, 10.0.2.2 aponta para o localhost do PC.
+  static final String baseUrl = _resolveBaseUrl();
+
+  static String _resolveBaseUrl() {
+    const fromEnv = String.fromEnvironment('API_BASE_URL');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8080/api';
+    }
+    return 'http://localhost:8080/api';
+  }
 
   static const String _tokenKey = 'auth_token';
   static const String _userNameKey = 'auth_user_name';

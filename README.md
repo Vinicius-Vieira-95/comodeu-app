@@ -45,12 +45,20 @@ como-deu-app/
 
 2. **Configurar banco de dados**
    ```sql
-   CREATE DATABASE como_deu;
+   CREATE DATABASE comodeu;
    ```
 
-3. **Editar `application.yml`**
-   - Ajuste as credenciais do PostgreSQL se necessário
-   - Mude `spring.jpa.hibernate.ddl-auto` para `create` na primeira execução
+3. **Escolher o perfil**
+   - `dev` (padrão): usa H2 em memória, não precisa de PostgreSQL nem de variáveis.
+   - `prod`: usa PostgreSQL e exige estas variáveis de ambiente:
+     ```powershell
+     $env:SPRING_PROFILES_ACTIVE = "prod"
+     $env:DB_PASSWORD = "sua-senha-do-postgres"
+     $env:JWT_SECRET  = "<segredo base64 com 64+ caracteres>"
+     # opcionais: DB_URL (padrão jdbc:postgresql://localhost:5432/comodeu),
+     #            DB_USERNAME (padrão postgres), CORS_ALLOWED_ORIGINS
+     ```
+     Sem `DB_PASSWORD` ou `JWT_SECRET` a aplicação não sobe.
 
 4. **Compilar e rodar**
    ```bash

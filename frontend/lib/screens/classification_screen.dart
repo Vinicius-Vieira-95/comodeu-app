@@ -106,8 +106,7 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.blue[100],
-                borderLeft: BorderSide(color: Colors.blue[600]!, width: 4),
-                borderRadius: BorderRadius.circular(4),
+                border: Border(left: BorderSide(color: Colors.blue[600]!, width: 4)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

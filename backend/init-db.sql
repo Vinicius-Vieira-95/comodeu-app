@@ -1,8 +1,8 @@
 -- Criar banco de dados
-CREATE DATABASE como_deu;
+CREATE DATABASE comodeu;
 
 -- Conectar ao banco
-\c como_deu;
+\c comodeu;
 
 -- Criar tabelas (JPA criará automaticamente, mas aqui está o schema esperado)
 

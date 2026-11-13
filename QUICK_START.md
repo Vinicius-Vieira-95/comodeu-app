@@ -19,10 +19,10 @@ psql --version
 cd backend
 
 # 1. Criar banco de dados
-createdb como_deu
+createdb comodeu
 
 # 2. (Opcional) Executar script SQL
-psql -U postgres -d como_deu -f init-db.sql
+psql -U postgres -d comodeu -f init-db.sql
 
 # 3. Rodar aplicação
 ./gradlew bootRun
@@ -95,7 +95,7 @@ flutter run -d emulator-5554
 ### Ver evidências no BD
 ```bash
 # Conectar ao PostgreSQL
-psql -U postgres -d como_deu
+psql -U postgres -d comodeu
 
 # Ver avaliações
 SELECT * FROM evaluations;
@@ -128,8 +128,8 @@ curl -X POST http://localhost:8080/api/como-items/suggest \
 ### Backend
 ```
 Error: could not connect to database
-→ createdb como_deu
-→ psql -U postgres -d como_deu -f init-db.sql
+→ createdb comodeu
+→ psql -U postgres -d comodeu -f init-db.sql
 
 Error: Port 8080 already in use
 → kill -9 $(lsof -t -i:8080)

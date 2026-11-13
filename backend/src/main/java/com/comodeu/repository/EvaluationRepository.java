@@ -7,5 +7,8 @@ import java.util.List;
 
 @Repository
 public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
-    List<Evaluation> findByStatus(Evaluation.EvaluationStatus status);
+    List<Evaluation> findAllByOrderByCreatedAtDesc();
+    List<Evaluation> findByOwnerIdOrderByCreatedAtDesc(Long ownerId);
+    List<Evaluation> findByStatusOrderByCreatedAtDesc(Evaluation.EvaluationStatus status);
+    List<Evaluation> findByOwnerIdAndStatusOrderByCreatedAtDesc(Long ownerId, Evaluation.EvaluationStatus status);
 }

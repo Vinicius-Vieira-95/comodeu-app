@@ -1,3 +1,7 @@
+/// Avaliação de um espaço cultural.
+///
+/// Avaliações criadas sem conexão e ainda não enviadas têm [id] negativo:
+/// -id é o identificador local no aparelho.
 class Evaluation {
   final int? id;
   final String visitorName;
@@ -19,12 +23,17 @@ class Evaluation {
     required this.status,
   });
 
+  /// Ainda está só no aparelho, aguardando envio.
+  bool get isPending => id != null && id! < 0;
+
+  bool get isCompleted => status == 'COMPLETED';
+
   factory Evaluation.fromJson(Map<String, dynamic> json) {
     return Evaluation(
       id: json['id'],
       visitorName: json['visitorName'],
       culturalSpaceName: json['culturalSpaceName'],
-      spaceType: json['spaceType'],
+      spaceType: json['spaceType'] ?? '',
       visitDate: DateTime.parse(json['visitDate']),
       createdAt: DateTime.parse(json['createdAt']),
       completedAt: json['completedAt'] != null

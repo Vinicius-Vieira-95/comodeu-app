@@ -1,34 +1,57 @@
 package com.comodeu.controller;
 
-import com.comodeu.entity.Evidence;
 import com.comodeu.dto.EvidenceDTO;
+import com.comodeu.dto.SaveClassificationsRequest;
+import com.comodeu.entity.Classification;
+import com.comodeu.entity.Evidence;
+import com.comodeu.exception.BadRequestException;
+import com.comodeu.service.ClassificationService;
 import com.comodeu.service.EvidenceService;
+import com.comodeu.service.PhotoStorageService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.Map;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.time.Duration;
+import java.util.List;
+
+/** Evidências: registro com upload da foto, download da foto e classificações. */
 @RestController
 @RequestMapping("/evidences")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class EvidenceController {
 
     private final EvidenceService evidenceService;
+    private final ClassificationService classificationService;
 
-    @PostMapping
-    public ResponseEntity<Evidence> registerEvidence(
-            @RequestBody Map<String, Object> request) {
-
-        Long evaluationId = Long.parseLong(request.get("evaluationId").toString());
-        String photoBase64 = (String) request.get("photoBase64");
-        Integer markX = request.get("markX") != null ? Integer.parseInt(request.get("markX").toString()) : null;
-        Integer markY = request.get("markY") != null ? Integer.parseInt(request.get("markY").toString()) : null;
-        String quickNote = (String) request.get("quickNote");
-
-        Evidence evidence = evidenceService.registerEvidence(evaluationId, photoBase64, markX, markY, quickNote);
+    /**
+     * Registra uma evidência. Envio em multipart/form-data:
+     * evaluationId, quickNote, markX (opcional), markY (opcional) e o arquivo "photo".
+     */
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<EvidenceDTO> registerEvidence(
+            @RequestParam Long evaluationId,
+            @RequestParam String quickNote,
+            @RequestParam(required = false) Integer markX,
+            @RequestParam(required = false) Integer markY,
+            @RequestPart("photo") MultipartFile photo) {
+        if (photo.isEmpty()) {
+            throw new BadRequestException("A foto é obrigatória");
+        }
+        byte[] bytes;
+        try {
+            bytes = photo.getBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Erro ao ler a foto enviada", e);
+        }
+        EvidenceDTO evidence = evidenceService.registerEvidence(evaluationId, bytes, markX, markY, quickNote);
         return ResponseEntity.status(HttpStatus.CREATED).body(evidence);
     }
 
@@ -39,36 +62,44 @@ public class EvidenceController {
 
     @GetMapping("/{id}")
     public ResponseEntity<EvidenceDTO> getEvidence(@PathVariable Long id) {
+        return ResponseEntity.ok(evidenceService.getEvidenceDTO(id));
+    }
+
+    /** Bytes da imagem. A foto de uma evidência nunca muda, então pode ficar em cache no cliente. */
+    @GetMapping("/{id}/photo")
+    public ResponseEntity<byte[]> getPhoto(@PathVariable Long id) {
         Evidence evidence = evidenceService.getEvidence(id);
-        return ResponseEntity.ok(convertToDTO(evidence));
+        byte[] bytes = evidenceService.getPhoto(evidence);
+        return ResponseEntity.ok()
+                .contentType(PhotoStorageService.mediaTypeOf(evidence.getPhotoPath()))
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(7)).cachePrivate())
+                .body(bytes);
+    }
+
+    @GetMapping("/{id}/classifications")
+    public ResponseEntity<List<Classification>> getClassifications(@PathVariable Long id) {
+        return ResponseEntity.ok(classificationService.getByEvidence(id));
+    }
+
+    /**
+     * Salva a classificação completa da evidência: substitui os itens anteriores
+     * (não cria duplicados). Lista vazia remove a classificação.
+     */
+    @PutMapping("/{id}/classifications")
+    public ResponseEntity<List<Classification>> saveClassifications(
+            @PathVariable Long id, @Valid @RequestBody SaveClassificationsRequest request) {
+        return ResponseEntity.ok(classificationService.replaceForEvidence(
+                id, request.comoItemIds(), request.personalAnalysis()));
     }
 
     @PutMapping("/{id}/classify")
-    public ResponseEntity<Evidence> classifyEvidence(@PathVariable Long id) {
-        return ResponseEntity.ok(evidenceService.classifyEvidence(id));
+    public ResponseEntity<EvidenceDTO> classifyEvidence(@PathVariable Long id) {
+        return ResponseEntity.ok(evidenceService.setStatus(id, Evidence.EvidenceStatus.CLASSIFIED));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEvidence(@PathVariable Long id) {
         evidenceService.deleteEvidence(id);
         return ResponseEntity.noContent().build();
-    }
-
-    private EvidenceDTO convertToDTO(Evidence evidence) {
-        String photoBase64 = null;
-        if (evidence.getPhotoData() != null) {
-            photoBase64 = java.util.Base64.getEncoder().encodeToString(evidence.getPhotoData());
-        }
-
-        return EvidenceDTO.builder()
-                .id(evidence.getId())
-                .evaluationId(evidence.getEvaluationId())
-                .photoDataBase64(photoBase64)
-                .markX(evidence.getMarkX())
-                .markY(evidence.getMarkY())
-                .quickNote(evidence.getQuickNote())
-                .captureTime(evidence.getCaptureTime())
-                .status(evidence.getStatus().toString())
-                .build();
     }
 }

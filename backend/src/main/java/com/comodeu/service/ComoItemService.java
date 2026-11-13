@@ -1,6 +1,7 @@
 package com.comodeu.service;
 
 import com.comodeu.entity.ComoItem;
+import com.comodeu.exception.NotFoundException;
 import com.comodeu.repository.ComoItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -67,7 +68,7 @@ public class ComoItemService {
 
     public ComoItem getItem(Long id) {
         return comoItemRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Item COMO D'EU não encontrado: " + id));
+                .orElseThrow(() -> new NotFoundException("Item COMO D'EU não encontrado: " + id));
     }
 
     public List<ComoItem> getItemsByCategory(String category) {

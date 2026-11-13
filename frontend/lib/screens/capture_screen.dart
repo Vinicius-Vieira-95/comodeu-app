@@ -1,28 +1,32 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image/image.dart' as img;
-import 'dart:convert';
-import 'dart:io';
+
 import '../models/evaluation.dart';
-import '../models/evidence.dart';
 import '../services/api_service.dart';
 import 'gallery_screen.dart';
 
+/// Registro rápido de evidência durante a visita: foto + marcação + nota.
 class CaptureScreen extends StatefulWidget {
   final Evaluation evaluation;
 
-  const CaptureScreen({Key? key, required this.evaluation}) : super(key: key);
+  /// Aberta a partir da tela da avaliação? Nesse caso "Galeria" só volta.
+  final bool fromGallery;
+
+  const CaptureScreen({super.key, required this.evaluation, this.fromGallery = false});
 
   @override
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
 
 class _CaptureScreenState extends State<CaptureScreen> {
+  static const int _maxNoteLength = 200;
+
   final ImagePicker _picker = ImagePicker();
   final _noteController = TextEditingController();
 
-  File? _selectedImage;
-  String? _photoBase64;
+  Uint8List? _photo;
   int? _markX;
   int? _markY;
   bool _isLoading = false;
@@ -33,103 +37,84 @@ class _CaptureScreenState extends State<CaptureScreen> {
     super.dispose();
   }
 
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _pickImage() async {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.camera,
         imageQuality: 85,
+        maxWidth: 1920,
+        maxHeight: 1920,
       );
-
-      if (image != null) {
-        setState(() {
-          _selectedImage = File(image.path);
-        });
-
-        // Converter para Base64
-        final bytes = await _selectedImage!.readAsBytes();
-        setState(() {
-          _photoBase64 = base64Encode(bytes);
-          _markX = null;
-          _markY = null;
-        });
-      }
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _photo = bytes;
+        _markX = null;
+        _markY = null;
+      });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao capturar foto: $e')),
-      );
+      _showMessage('Erro ao capturar foto: $e');
     }
   }
 
   void _markPoint(TapDownDetails details) {
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final offset = details.localPosition;
-
     setState(() {
       _markX = offset.dx.toInt();
       _markY = offset.dy.toInt();
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('✓ Ponto marcado')),
-    );
+    _showMessage('✓ Ponto marcado');
   }
 
   Future<void> _registerEvidence() async {
-    if (_selectedImage == null || _noteController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tire uma foto e escreva uma nota')),
-      );
+    final note = _noteController.text.trim();
+    if (_photo == null || note.isEmpty) {
+      _showMessage('Tire uma foto e escreva uma nota');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
       final evidence = await ApiService.registerEvidence(
-        evaluationId: widget.evaluation.id!,
-        photoBase64: _photoBase64!,
+        evaluation: widget.evaluation,
+        photo: _photo!,
         markX: _markX,
         markY: _markY,
-        quickNote: _noteController.text,
+        quickNote: note,
       );
-
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Evidência registrada!')),
-      );
-
+      _showMessage(evidence.isPending
+          ? '📥 Sem conexão: evidência guardada no aparelho. Será enviada automaticamente.'
+          : '✓ Evidência registrada!');
       setState(() {
-        _selectedImage = null;
-        _photoBase64 = null;
+        _photo = null;
         _markX = null;
         _markY = null;
         _noteController.clear();
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $e')),
-      );
+      _showMessage('Erro: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _goToGallery() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => GalleryScreen(evaluation: widget.evaluation),
-      ),
-    ).then((value) {
-      if (value == true) {
-        Navigator.pop(context, true);
-      }
-    });
+    if (widget.fromGallery) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => GalleryScreen(evaluation: widget.evaluation)),
+      );
+    }
   }
 
   @override
@@ -143,7 +128,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
           IconButton(
             icon: const Icon(Icons.photo_library),
             onPressed: _goToGallery,
-            tooltip: 'Ver Galeria',
+            tooltip: 'Ver evidências',
           ),
         ],
       ),
@@ -152,32 +137,35 @@ class _CaptureScreenState extends State<CaptureScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Registre uma Evidência',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              widget.evaluation.culturalSpaceName,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              '📸 Fotografe e marque onde está o problema',
-              style: TextStyle(fontSize: 14, color: Colors.orange),
+            Text(
+              _photo == null
+                  ? '📸 Toque abaixo para fotografar'
+                  : '👆 Toque na foto para marcar onde está o problema',
+              style: const TextStyle(fontSize: 14, color: Colors.orange),
             ),
             const SizedBox(height: 20),
             GestureDetector(
-              onTap: _pickImage,
-              onTapDown: _selectedImage != null ? _markPoint : null,
+              onTap: _photo == null ? _pickImage : null,
+              onTapDown: _photo != null ? _markPoint : null,
               child: Container(
                 width: double.infinity,
                 height: 300,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.blue, width: 2),
                   borderRadius: BorderRadius.circular(8),
                   color: Colors.grey[200],
                 ),
-                child: _selectedImage != null
+                child: _photo != null
                     ? Stack(
                         children: [
-                          Image.file(
-                            _selectedImage!,
+                          Image.memory(
+                            _photo!,
                             fit: BoxFit.cover,
                             width: double.infinity,
                             height: double.infinity,
@@ -202,24 +190,28 @@ class _CaptureScreenState extends State<CaptureScreen> {
                         children: [
                           Icon(Icons.camera_alt, size: 48, color: Colors.grey[400]),
                           const SizedBox(height: 12),
-                          Text(
-                            'Clique para capturar foto',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
+                          Text('Clique para capturar foto', style: TextStyle(color: Colors.grey[600])),
                         ],
                       ),
               ),
             ),
-            const SizedBox(height: 20),
+            if (_photo != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _isLoading ? null : _pickImage,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Tirar outra foto'),
+                ),
+              ),
+            const SizedBox(height: 12),
             TextField(
               controller: _noteController,
-              maxLength: 100,
+              maxLength: _maxNoteLength,
               decoration: InputDecoration(
                 labelText: 'Descrição Rápida',
                 hintText: 'Ex: Placa com letra pequena',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 prefixIcon: const Icon(Icons.edit),
               ),
             ),
@@ -230,11 +222,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _isLoading ? null : _registerEvidence,
                     icon: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.check),
                     label: const Text('Registrar'),
                   ),
@@ -244,7 +232,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
                   child: OutlinedButton.icon(
                     onPressed: _goToGallery,
                     icon: const Icon(Icons.folder),
-                    label: const Text('Galeria'),
+                    label: const Text('Evidências'),
                   ),
                 ),
               ],

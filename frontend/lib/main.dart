@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
+import 'navigation.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/api_service.dart';
-
-/// Permite navegar para o login de fora de um widget (ex.: token expirado).
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +28,7 @@ class ComoDeUApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
+      navigatorObservers: [routeObserver],
       title: 'Avaliador COMO D\'EU',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

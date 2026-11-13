@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import '../models/evaluation.dart';
 import 'capture_screen.dart';
 
 class EvaluationFormScreen extends StatefulWidget {
@@ -26,9 +25,9 @@ class _EvaluationFormScreenState extends State<EvaluationFormScreen> {
   }
 
   void _createEvaluation() async {
-    if (_visitorNameController.text.isEmpty ||
-        _culturalSpaceController.text.isEmpty ||
-        _selectedSpaceType == null) {
+    final visitorName = _visitorNameController.text.trim();
+    final spaceName = _culturalSpaceController.text.trim();
+    if (visitorName.isEmpty || spaceName.isEmpty || _selectedSpaceType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Preencha todos os campos')),
       );
@@ -41,28 +40,33 @@ class _EvaluationFormScreenState extends State<EvaluationFormScreen> {
 
     try {
       final evaluation = await ApiService.createEvaluation(
-        visitorName: _visitorNameController.text,
-        culturalSpaceName: _culturalSpaceController.text,
+        visitorName: visitorName,
+        culturalSpaceName: spaceName,
         spaceType: _selectedSpaceType!,
       );
 
       if (!mounted) return;
 
-      Navigator.push(
+      if (evaluation.isPending) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📥 Sem conexão: avaliação guardada no aparelho. Será enviada automaticamente.'),
+          ),
+        );
+      }
+
+      // Substitui o formulário pela captura: ao voltar, o usuário cai direto na Home.
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => CaptureScreen(evaluation: evaluation),
         ),
-      ).then((value) {
-        if (value == true) {
-          Navigator.pop(context, true);
-        }
-      });
+      );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erro: $e')),
       );
-    } finally {
       setState(() {
         _isLoading = false;
       });

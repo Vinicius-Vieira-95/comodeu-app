@@ -1,69 +1,53 @@
 package com.comodeu.controller;
 
+import com.comodeu.dto.CreateClassificationRequest;
 import com.comodeu.entity.Classification;
-import com.comodeu.repository.ClassificationRepository;
-import com.comodeu.repository.ComoItemRepository;
-import com.comodeu.service.EvidenceService;
+import com.comodeu.service.ClassificationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.Map;
 
+import java.util.List;
+
+/**
+ * Classificações avulsas. Para salvar a classificação completa de uma evidência,
+ * prefira PUT /evidences/{id}/classifications.
+ */
 @RestController
 @RequestMapping("/classifications")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ClassificationController {
 
-    private final ClassificationRepository classificationRepository;
-    private final ComoItemRepository comoItemRepository;
-    private final EvidenceService evidenceService;
+    private final ClassificationService classificationService;
 
+    /** Cria; se a evidência já tiver esse item, só atualiza a análise (não duplica). */
     @PostMapping
-    public ResponseEntity<Classification> createClassification(
-            @RequestBody Map<String, Object> request) {
-
-        Long evidenceId = Long.parseLong(request.get("evidenceId").toString());
-        Long comoItemId = Long.parseLong(request.get("comoItemId").toString());
-        String personalAnalysis = (String) request.get("personalAnalysis");
-
-        // Validar que o item existe
-        comoItemRepository.findById(comoItemId)
-                .orElseThrow(() -> new RuntimeException("Item COMO D'EU não encontrado"));
-
-        // Valida que a evidência existe e marca como classificada
-        evidenceService.classifyEvidence(evidenceId);
-
-        Classification classification = Classification.builder()
-                .evidenceId(evidenceId)
-                .comoItemId(comoItemId)
-                .personalAnalysis(personalAnalysis)
-                .build();
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(classificationRepository.save(classification));
+    public ResponseEntity<Classification> createClassification(@Valid @RequestBody CreateClassificationRequest request) {
+        Classification classification = classificationService.createOrUpdate(
+                request.evidenceId(), request.comoItemId(), request.personalAnalysis());
+        return ResponseEntity.status(HttpStatus.CREATED).body(classification);
     }
 
     @GetMapping("/evidence/{evidenceId}")
     public ResponseEntity<List<Classification>> getClassificationsByEvidence(@PathVariable Long evidenceId) {
-        return ResponseEntity.ok(classificationRepository.findByEvidenceId(evidenceId));
+        return ResponseEntity.ok(classificationService.getByEvidence(evidenceId));
     }
 
     @GetMapping("/item/{comoItemId}")
     public ResponseEntity<List<Classification>> getClassificationsByItem(@PathVariable Long comoItemId) {
-        return ResponseEntity.ok(classificationRepository.findByComoItemId(comoItemId));
+        return ResponseEntity.ok(classificationService.getByItem(comoItemId));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Classification> getClassification(@PathVariable Long id) {
-        return ResponseEntity.ok(classificationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Classificação não encontrada")));
+        return ResponseEntity.ok(classificationService.get(id));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteClassification(@PathVariable Long id) {
-        classificationRepository.deleteById(id);
+        classificationService.delete(id);
         return ResponseEntity.noContent().build();
     }
 }

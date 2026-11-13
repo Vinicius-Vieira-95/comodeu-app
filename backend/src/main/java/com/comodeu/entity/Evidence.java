@@ -19,10 +19,20 @@ public class Evidence {
     @Column(nullable = false)
     private Long evaluationId;  // Foreign key para Evaluation
 
+    /** Nome do arquivo da foto na pasta de fotos (app.storage.photos-dir). */
+    @Column(name = "photo_path", length = 100)
+    private String photoPath;
+
+    /**
+     * LEGADO: fotos antigas gravadas direto no banco. Na inicialização,
+     * DataMaintenance move cada uma para um arquivo e limpa esta coluna.
+     * Não usar em código novo.
+     */
     // Sem @Lob: no PostgreSQL o @Lob grava como large object (oid/bigint),
     // incompatível com a coluna BYTEA.
     @Column(columnDefinition = "BYTEA")
-    private byte[] photoData;  // Foto em base64 ou arquivo
+    @ToString.Exclude
+    private byte[] photoData;
 
     @Column(name = "mark_x")
     private Integer markX;

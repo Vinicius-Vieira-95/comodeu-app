@@ -16,6 +16,13 @@ public class Evaluation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Usuário dono da avaliação (users.id). Nulo apenas em avaliações antigas,
+     * criadas antes deste campo existir: essas ficam visíveis só para ADMIN.
+     */
+    @Column(name = "owner_id")
+    private Long ownerId;
+
     @Column(nullable = false, length = 100)
     private String visitorName;
 

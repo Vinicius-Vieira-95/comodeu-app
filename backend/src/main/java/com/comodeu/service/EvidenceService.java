@@ -1,83 +1,120 @@
 package com.comodeu.service;
 
-import com.comodeu.entity.Evidence;
-import com.comodeu.entity.Classification;
 import com.comodeu.dto.EvidenceDTO;
-import com.comodeu.repository.EvidenceRepository;
+import com.comodeu.entity.Evaluation;
+import com.comodeu.entity.Evidence;
+import com.comodeu.exception.BadRequestException;
+import com.comodeu.exception.NotFoundException;
 import com.comodeu.repository.ClassificationRepository;
+import com.comodeu.repository.EvidenceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.Base64;
-import java.util.List;
-import java.util.stream.Collectors;
 
+import java.util.List;
+
+/**
+ * Evidências (foto + marcação + nota). O acesso segue o dono da avaliação:
+ * se o usuário não pode ver a avaliação, a evidência responde 404.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class EvidenceService {
 
+    private static final int MAX_NOTE_LENGTH = 200;
+
     private final EvidenceRepository evidenceRepository;
     private final ClassificationRepository classificationRepository;
+    private final EvaluationService evaluationService;
+    private final PhotoStorageService photoStorageService;
 
-    public Evidence registerEvidence(Long evaluationId, String photoBase64, Integer markX, Integer markY, String quickNote) {
-        byte[] photoData = photoBase64 != null ? Base64.getDecoder().decode(photoBase64) : null;
+    public EvidenceDTO registerEvidence(Long evaluationId, byte[] photo, Integer markX, Integer markY, String quickNote) {
+        Evaluation evaluation = evaluationService.getEvaluation(evaluationId);
+        if (evaluation.getStatus() == Evaluation.EvaluationStatus.COMPLETED) {
+            throw new BadRequestException("Avaliação já concluída: não é possível adicionar evidências");
+        }
+        if (quickNote == null || quickNote.isBlank()) {
+            throw new BadRequestException("A nota rápida é obrigatória");
+        }
+        if (quickNote.trim().length() > MAX_NOTE_LENGTH) {
+            throw new BadRequestException("A nota rápida deve ter no máximo " + MAX_NOTE_LENGTH + " caracteres");
+        }
 
+        String photoPath = photoStorageService.save(photo);
+        photoStorageService.deleteOnRollback(photoPath); // não deixa arquivo órfão se o banco falhar
         Evidence evidence = Evidence.builder()
                 .evaluationId(evaluationId)
-                .photoData(photoData)
+                .photoPath(photoPath)
                 .markX(markX)
                 .markY(markY)
-                .quickNote(quickNote)
+                .quickNote(quickNote.trim())
                 .status(Evidence.EvidenceStatus.REGISTERED)
                 .build();
-
-        return evidenceRepository.save(evidence);
+        return toDTO(evidenceRepository.save(evidence));
     }
 
+    @Transactional(readOnly = true)
     public List<EvidenceDTO> getEvidencesByEvaluation(Long evaluationId) {
-        return evidenceRepository.findByEvaluationId(evaluationId).stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
+        evaluationService.getEvaluation(evaluationId); // valida acesso
+        return evidenceRepository.findByEvaluationIdOrderByCaptureTimeAsc(evaluationId).stream()
+                .map(this::toDTO)
+                .toList();
     }
 
+    /** Busca uma evidência que o usuário atual pode acessar (senão, 404). */
+    @Transactional(readOnly = true)
     public Evidence getEvidence(Long id) {
-        return evidenceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Evidência não encontrada: " + id));
+        Evidence evidence = evidenceRepository.findById(id)
+                .orElseThrow(() -> notFound(id));
+        try {
+            evaluationService.getEvaluation(evidence.getEvaluationId());
+        } catch (NotFoundException e) {
+            throw notFound(id);
+        }
+        return evidence;
     }
 
-    public Evidence classifyEvidence(Long evidenceId) {
-        Evidence evidence = getEvidence(evidenceId);
-        evidence.setStatus(Evidence.EvidenceStatus.CLASSIFIED);
-        return evidenceRepository.save(evidence);
+    @Transactional(readOnly = true)
+    public EvidenceDTO getEvidenceDTO(Long id) {
+        return toDTO(getEvidence(id));
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] getPhoto(Evidence evidence) {
+        if (evidence.getPhotoPath() == null) {
+            throw new NotFoundException("Evidência sem foto");
+        }
+        return photoStorageService.load(evidence.getPhotoPath());
+    }
+
+    public EvidenceDTO setStatus(Long id, Evidence.EvidenceStatus status) {
+        Evidence evidence = getEvidence(id);
+        evidence.setStatus(status);
+        return toDTO(evidenceRepository.save(evidence));
     }
 
     public void deleteEvidence(Long id) {
         Evidence evidence = getEvidence(id);
-
-        // Delete associated classifications
-        classificationRepository.findByEvidenceId(id)
-                .forEach(classificationRepository::delete);
-
-        // Delete evidence
+        classificationRepository.deleteByEvidenceId(id);
         evidenceRepository.delete(evidence);
+        photoStorageService.deleteAfterCommit(evidence.getPhotoPath());
     }
 
-    private EvidenceDTO convertToDTO(Evidence evidence) {
-        String photoBase64 = null;
-        if (evidence.getPhotoData() != null) {
-            photoBase64 = Base64.getEncoder().encodeToString(evidence.getPhotoData());
-        }
-
+    public EvidenceDTO toDTO(Evidence evidence) {
         return EvidenceDTO.builder()
                 .id(evidence.getId())
                 .evaluationId(evidence.getEvaluationId())
-                .photoDataBase64(photoBase64)
+                .hasPhoto(evidence.getPhotoPath() != null)
                 .markX(evidence.getMarkX())
                 .markY(evidence.getMarkY())
                 .quickNote(evidence.getQuickNote())
                 .captureTime(evidence.getCaptureTime())
                 .status(evidence.getStatus().toString())
                 .build();
+    }
+
+    private static NotFoundException notFound(Long id) {
+        return new NotFoundException("Evidência não encontrada: " + id);
     }
 }

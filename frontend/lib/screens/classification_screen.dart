@@ -1,43 +1,142 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
+import '../models/classification.dart';
+import '../models/como_item.dart';
 import '../models/evaluation.dart';
 import '../models/evidence.dart';
-import '../models/como_item.dart';
 import '../services/api_service.dart';
+import '../widgets/evidence_photo.dart';
 
+/// Dados carregados pela tela.
+class _ScreenData {
+  final List<ComoItem> suggestions;
+  final List<ComoItem> allItems;
+  final List<Classification> saved;
+
+  _ScreenData(this.suggestions, this.allItems, this.saved);
+}
+
+/// Classificação de uma evidência nos itens COMO D'EU.
+///
+/// Mostra a classificação já salva (itens marcados + análise). Salvar substitui
+/// a classificação anterior, sem criar duplicados.
 class ClassificationScreen extends StatefulWidget {
   final Evidence evidence;
   final Evaluation evaluation;
 
   const ClassificationScreen({
-    Key? key,
+    super.key,
     required this.evidence,
     required this.evaluation,
-  }) : super(key: key);
+  });
 
   @override
   State<ClassificationScreen> createState() => _ClassificationScreenState();
 }
 
 class _ClassificationScreenState extends State<ClassificationScreen> {
-  /// [0] = sugestões pela nota, [1] = todos os itens COMO D'EU.
-  late Future<List<List<ComoItem>>> futureItems;
+  late Future<_ScreenData> futureData;
   final _analysisController = TextEditingController();
   final Set<int> _selectedItemIds = {};
+  bool _prefilled = false;
+  bool _hasSavedClassification = false;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    futureItems = _loadItems();
+    futureData = _load();
   }
 
-  Future<List<List<ComoItem>>> _loadItems() async {
-    // Sugestão é opcional: se falhar, o usuário ainda escolhe na lista completa.
-    final suggestions = await ApiService.suggestComoItems(widget.evidence.quickNote)
-        .catchError((_) => <ComoItem>[]);
-    final all = await ApiService.getAllComoItems();
-    return [suggestions, all];
+  @override
+  void dispose() {
+    _analysisController.dispose();
+    super.dispose();
+  }
+
+  Future<_ScreenData> _load() async {
+    final evidenceId = widget.evidence.id!;
+    // Sugestão é opcional: se falhar, devolve lista vazia.
+    final results = await Future.wait([
+      ApiService.suggestComoItems(widget.evidence.quickNote),
+      ApiService.getAllComoItems(),
+      ApiService.getClassifications(evidenceId),
+    ]);
+    final data = _ScreenData(
+      results[0] as List<ComoItem>,
+      results[1] as List<ComoItem>,
+      results[2] as List<Classification>,
+    );
+
+    // Preenche com a classificação salva só na primeira carga (não apaga o que o usuário editou).
+    if (!_prefilled) {
+      _prefilled = true;
+      _hasSavedClassification = data.saved.isNotEmpty;
+      _selectedItemIds.addAll(data.saved.map((c) => c.comoItemId));
+      if (data.saved.isNotEmpty && _analysisController.text.isEmpty) {
+        _analysisController.text = data.saved.first.personalAnalysis;
+      }
+      if (mounted) setState(() {}); // atualiza título e botão fora do FutureBuilder
+    }
+    return data;
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _saveClassifications() async {
+    final analysis = _analysisController.text.trim();
+    if (_selectedItemIds.isEmpty || analysis.isEmpty) {
+      _showMessage('Selecione itens e escreva sua análise');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await ApiService.saveClassifications(
+        evidenceId: widget.evidence.id!,
+        comoItemIds: _selectedItemIds.toList(),
+        personalAnalysis: analysis,
+      );
+      if (!mounted) return;
+      _showMessage('✓ Classificação salva!');
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showMessage(e is OfflineException ? 'Sem conexão: a classificação precisa de internet.' : 'Erro: $e');
+    }
+  }
+
+  Future<void> _deleteEvidence() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Apagar evidência?'),
+        content: const Text('A foto, a nota e as classificações desta evidência serão apagadas.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Apagar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await ApiService.deleteEvidence(widget.evidence);
+      if (!mounted) return;
+      _showMessage('Evidência apagada');
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showMessage('Erro: $e');
+    }
   }
 
   Widget _itemTile(ComoItem item, {bool suggested = false}) {
@@ -61,57 +160,19 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
   }
 
   @override
-  void dispose() {
-    _analysisController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveClassifications() async {
-    if (_selectedItemIds.isEmpty || _analysisController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecione itens e escreva sua análise')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      for (int itemId in _selectedItemIds) {
-        await ApiService.createClassification(
-          evidenceId: widget.evidence.id!,
-          comoItemId: itemId,
-          personalAnalysis: _analysisController.text.trim(),
-        );
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Classificação salva!')),
-      );
-
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $e')),
-      );
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Classificar Evidência'),
+        title: Text(_hasSavedClassification ? 'Editar Classificação' : 'Classificar Evidência'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Apagar evidência',
+            onPressed: _isLoading ? null : _deleteEvidence,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -119,16 +180,10 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Foto
-            if (widget.evidence.photoDataBase64 != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.memory(
-                  base64Decode(widget.evidence.photoDataBase64!),
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: 200,
-                ),
-              ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: EvidencePhoto(evidence: widget.evidence, width: double.infinity, height: 200),
+            ),
             const SizedBox(height: 16),
             // Nota original
             Container(
@@ -142,50 +197,62 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
                 children: [
                   const Text(
                     'Sua nota durante a visita:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    widget.evidence.quickNote,
-                    style: const TextStyle(fontSize: 16),
-                  ),
+                  Text(widget.evidence.quickNote, style: const TextStyle(fontSize: 16, color: Colors.black87)),
                 ],
               ),
             ),
             const SizedBox(height: 20),
-            // Itens: sugeridos primeiro, depois a lista completa
-            FutureBuilder<List<List<ComoItem>>>(
-              future: futureItems,
+            FutureBuilder<_ScreenData>(
+              future: futureData,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
+                  final error = snapshot.error;
                   return Column(
                     children: [
-                      Text('Erro ao carregar itens: ${snapshot.error}'),
+                      Text(error is OfflineException
+                          ? 'Sem conexão: a classificação precisa de internet.'
+                          : 'Erro ao carregar: $error'),
                       TextButton(
-                        onPressed: () => setState(() => futureItems = _loadItems()),
+                        onPressed: () => setState(() => futureData = _load()),
                         child: const Text('Tentar novamente'),
                       ),
                     ],
                   );
                 }
-                final suggestions = snapshot.data![0];
-                final suggestedIds = suggestions.map((i) => i.id).toSet();
-                final others =
-                    snapshot.data![1].where((i) => !suggestedIds.contains(i.id)).toList();
+                final data = snapshot.data!;
+                final suggestedIds = data.suggestions.map((i) => i.id).toSet();
+                final others = data.allItems.where((i) => !suggestedIds.contains(i.id)).toList();
                 const titleStyle = TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (data.saved.isNotEmpty)
+                      Card(
+                        color: Colors.green[50],
+                        child: const ListTile(
+                          leading: Icon(Icons.check_circle, color: Colors.green),
+                          title: Text('Classificação salva', style: TextStyle(color: Colors.black87)),
+                          subtitle: Text(
+                            'Os itens e a análise abaixo foram salvos antes. '
+                            'Ao salvar de novo, a classificação anterior é substituída.',
+                            style: TextStyle(color: Colors.black54),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
                     const Text('Itens Sugeridos', style: titleStyle),
                     const SizedBox(height: 8),
-                    if (suggestions.isEmpty)
+                    if (data.suggestions.isEmpty)
                       const Text('Nenhuma sugestão para esta nota. Escolha na lista abaixo.')
                     else
-                      ...suggestions.map((i) => _itemTile(i, suggested: true)),
+                      ...data.suggestions.map((i) => _itemTile(i, suggested: true)),
                     const SizedBox(height: 16),
                     const Text('Todos os Itens COMO D\'EU', style: titleStyle),
                     const SizedBox(height: 8),
@@ -195,7 +262,6 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
               },
             ),
             const SizedBox(height: 20),
-            // Análise pessoal
             const Text(
               'Sua Análise Pessoal',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -204,27 +270,22 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
             TextField(
               controller: _analysisController,
               maxLines: 5,
+              maxLength: 2000,
               decoration: InputDecoration(
                 hintText: 'Por que isso é um problema? Como impacta a experiência?',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
                 onPressed: _isLoading ? null : _saveClassifications,
                 icon: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.check),
-                label: const Text('Salvar Classificação'),
+                label: Text(_hasSavedClassification ? 'Salvar Alterações' : 'Salvar Classificação'),
               ),
             ),
           ],

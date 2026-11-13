@@ -1,30 +1,28 @@
 package com.comodeu.controller;
 
+import com.comodeu.dto.CreateEvaluationRequest;
 import com.comodeu.entity.Evaluation;
 import com.comodeu.service.EvaluationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.Map;
 
+import java.util.List;
+
+/** Avaliações do usuário logado (ADMIN vê todas). */
 @RestController
 @RequestMapping("/evaluations")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class EvaluationController {
 
     private final EvaluationService evaluationService;
 
     @PostMapping
-    public ResponseEntity<Evaluation> createEvaluation(
-            @RequestBody Map<String, String> request) {
+    public ResponseEntity<Evaluation> createEvaluation(@Valid @RequestBody CreateEvaluationRequest request) {
         Evaluation evaluation = evaluationService.createEvaluation(
-                request.get("visitorName"),
-                request.get("culturalSpaceName"),
-                request.get("spaceType")
-        );
+                request.visitorName(), request.culturalSpaceName(), request.spaceType());
         return ResponseEntity.status(HttpStatus.CREATED).body(evaluation);
     }
 

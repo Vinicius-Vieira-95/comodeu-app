@@ -22,6 +22,7 @@ backend/build/
 backend/bin/
 !backend/gradle/wrapper/gradle-wrapper.jar
 backend/HELP.md
+backend/uploads/
 
 # ===== Frontend (Flutter / Dart) =====
 frontend/.dart_tool/

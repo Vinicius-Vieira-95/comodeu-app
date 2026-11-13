@@ -88,21 +88,45 @@ como-deu-app/
 ## 3. Funcionalidades e fluxo de uso
 
 ```
-Login ──▶ Home ──▶ Nova Avaliação ──▶ Registrar Evidência ──▶ Galeria ──▶ Classificar Evidência
-            ▲          (formulário)       (foto + marca + nota)   (miniaturas)   (itens + análise)
-            └── lista de avaliações ───────────────────────────────┘
+Login ──▶ Home ──▶ Nova Avaliação ──▶ Registrar Evidência
+            │          (formulário)       (foto + marca + nota)
+            │                                     │
+            └──▶ Avaliação (evidências) ◀─────────┘
+                    │  ├─ Nova evidência ──▶ Registrar Evidência
+                    │  ├─ Concluir avaliação
+                    │  └─ Segurar evidência ──▶ Apagar
+                    └──▶ Classificar Evidência (itens + análise, editar, apagar)
 ```
 
 | Tela | Arquivo | O que faz |
 |---|---|---|
 | **Login** | `login_screen.dart` | Entrar com e-mail e senha, ou criar conta (nome, e-mail, senha de 6 a 72 caracteres). O token fica salvo no aparelho. |
-| **Home** | `home_screen.dart` | Lista as avaliações com o status *Em Progresso* ou *Concluído*. Tem os botões "Nova Avaliação" e "Sair". Puxe para baixo para atualizar. |
-| **Nova Avaliação** | `evaluation_form_screen.dart` | Nome do visitante, nome do espaço e tipo (Museu, Galeria, Teatro, Biblioteca, Outro). |
-| **Registrar Evidência** | `capture_screen.dart` | Abre a câmera (qualidade 85%). Um toque na foto marca o elemento (coordenadas X/Y). A nota rápida tem até 200 caracteres. A foto vai para a API em Base64. |
-| **Galeria** | `gallery_screen.dart` | Grade com as evidências da avaliação e o status *Registrada* (laranja) ou *Classificada* (verde). Toque em uma para classificar. |
-| **Classificar Evidência** | `classification_screen.dart` | Mostra a foto e a nota. Lista os **itens sugeridos** (⭐) e, abaixo, **todos os 17 itens**. O avaliador marca um ou mais itens, escreve a análise e salva. Cada item marcado vira uma classificação, e a evidência passa a *Classificada*. |
+| **Home** | `home_screen.dart` | Lista as avaliações **do usuário logado**, com status *Não enviada*, *Em Progresso* ou *Concluída*. Toque em uma para abri-la. Mostra avisos de "sem conexão" e de itens aguardando envio, com o botão **Sincronizar**. Puxe para baixo para atualizar. |
+| **Nova Avaliação** | `evaluation_form_screen.dart` | Nome do visitante, nome do espaço e tipo (Museu, Galeria, Teatro, Biblioteca, Outro). Sem conexão, a avaliação fica guardada no aparelho. |
+| **Registrar Evidência** | `capture_screen.dart` | Abre a câmera (qualidade 85%, no máximo 1920 px). Um toque na foto marca o elemento (coordenadas X/Y). A nota rápida tem até 200 caracteres. A foto é enviada como arquivo (upload multipart). Sem conexão, a evidência fica guardada no aparelho. |
+| **Avaliação** | `gallery_screen.dart` | Grade com as evidências e o status de cada uma: *Registrada* (laranja), *Classificada* (verde), *Não enviada* (cinza) ou *Erro ao enviar* (vermelho). Tem o botão **Nova evidência** e o ✔ **Concluir avaliação** na barra superior. Tocar em uma evidência abre a classificação, e segurar permite apagá-la. |
+| **Classificar Evidência** | `classification_screen.dart` | Mostra a foto, a nota, os **itens sugeridos** (⭐) e **todos os 17 itens**. Se a evidência já foi classificada, os itens e a análise salvos aparecem preenchidos ("Editar Classificação"). Salvar **substitui** a classificação anterior, sem duplicar. A lixeira na barra superior apaga a evidência. Precisa de conexão. |
 
-**Sessão:** se a API responder `401` (token expirado ou inválido), o app apaga a sessão e volta para o Login automaticamente (`ApiService.onUnauthorized` em `main.dart`). O token vale **24 horas**.
+**Sessão:** se a API responder `401` (token expirado ou inválido), o app encerra a sessão e volta para o Login (`ApiService.onUnauthorized` em `main.dart`). O token vale **24 horas**. Nesse caso, as pendências offline **são mantidas** e enviadas quando a mesma conta entrar de novo.
+
+**Concluir avaliação:** depois de concluída, a avaliação não aceita novas evidências, mas as já registradas ainda podem ser classificadas.
+
+### Modo offline (Android)
+
+Durante a visita a conexão pode falhar. Por isso, no Android, o app continua funcionando sem internet:
+
+| Ação sem conexão | O que acontece |
+|---|---|
+| Ver avaliações e evidências | Mostra a última versão salva no aparelho (e as fotos já vistas) |
+| Criar avaliação | Fica guardada no aparelho como *Não enviada* |
+| Registrar evidência | Fica guardada no aparelho (com a foto) como *Não enviada* |
+| Classificar evidência | **Não disponível**: precisa de conexão |
+
+**Sincronização:** o app envia as pendências automaticamente ao abrir a Home ou uma avaliação, ao puxar para atualizar, e pelo botão **Sincronizar**. Primeiro são enviadas as avaliações, depois as evidências. Se o servidor recusar uma evidência (por exemplo, a avaliação foi concluída nesse meio-tempo), ela fica marcada como *Erro ao enviar* com o motivo, e o usuário pode apagá-la.
+
+**Onde fica:** banco SQLite do app (`comodeu_offline.db`, em `lib/services/offline_store.dart`). Os dados ficam ligados à conta: se outra conta entrar no aparelho, eles são apagados. Ao tocar em **Sair**, o app avisa se há pendências, porque sair apaga tudo o que ainda não foi enviado.
+
+No **Flutter Web** o modo offline não existe (o `sqflite` não roda no navegador): sem conexão, as ações mostram erro.
 
 ---
 
@@ -149,16 +173,35 @@ A comparação não trata plural nem variações. Por exemplo, "rampas" não é 
 As tabelas são criadas e atualizadas pelo Hibernate (`ddl-auto: update`). As relações são feitas por IDs numéricos simples (sem chaves estrangeiras declaradas no JPA).
 
 ```
-users            evaluations ──1:N──▶ evidences ──1:N──▶ classifications ◀──N:1── como_items
+users ──1:N──▶ evaluations ──1:N──▶ evidences ──1:N──▶ classifications ◀──N:1── como_items
+     (owner_id)                        │
+                                       └── photo_path ──▶ arquivo na pasta de fotos
 ```
 
 | Tabela | Campos principais | Observações |
 |---|---|---|
 | `users` | `id`, `name`, `email` (único), `password` (hash BCrypt), `role` (`USER`/`ADMIN`), `created_at` | O cadastro público sempre cria `USER`. |
-| `evaluations` | `id`, `visitor_name`, `cultural_space_name`, `space_type`, `visit_date`, `created_at`, `completed_at`, `status` | `status`: `IN_PROGRESS` → `COMPLETED`. |
-| `evidences` | `id`, `evaluation_id`, `photo_data` (BYTEA), `mark_x`, `mark_y`, `quick_note` (≤200), `capture_time`, `status` | `status`: `REGISTERED` → `CLASSIFIED`. A foto é guardada no próprio banco. |
+| `evaluations` | `id`, `owner_id`, `visitor_name`, `cultural_space_name`, `space_type`, `visit_date`, `created_at`, `completed_at`, `status` | `owner_id` é o usuário dono. `status`: `IN_PROGRESS` → `COMPLETED`. |
+| `evidences` | `id`, `evaluation_id`, `photo_path`, `mark_x`, `mark_y`, `quick_note` (≤200), `capture_time`, `status` | `photo_path` é o nome do arquivo da foto. `status`: `REGISTERED` ⇄ `CLASSIFIED`. A coluna `photo_data` é legada (ver abaixo). |
 | `como_items` | `id`, `item_number` (1–17), `name`, `description`, `category`, `keywords`, `active` | Criados na inicialização. |
-| `classifications` | `id`, `evidence_id`, `como_item_id`, `personal_analysis` (≤2000), `classification_time` | Uma linha por item escolhido. |
+| `classifications` | `id`, `evidence_id`, `como_item_id`, `personal_analysis` (≤2000), `classification_time` | Uma linha por item escolhido. **No máximo uma por (evidência, item).** |
+
+### Fotos
+
+As fotos ficam **em arquivos**, na pasta definida por `app.storage.photos-dir` (variável `PHOTOS_DIR`, padrão `uploads/photos`, relativa à pasta onde o backend roda). No banco fica só o nome do arquivo, um UUID gerado pelo servidor, como `3a16…cad5.jpg`.
+
+- O servidor aceita **JPEG, PNG ou WebP**, identificados pelo conteúdo do arquivo (não pela extensão). O limite é de 10 MB.
+- Ao apagar uma evidência ou avaliação, o arquivo também é apagado, só depois que o banco confirmar a exclusão.
+- A pasta `backend/uploads/` está no `.gitignore`.
+
+### Ajustes automáticos de dados antigos (`DataMaintenance`)
+
+A cada inicialização, o backend corrige dados criados por versões anteriores. Rodar de novo não causa efeito extra.
+
+1. **Fotos no banco:** evidências com a foto na coluna `photo_data` (formato antigo) têm a imagem movida para a pasta de fotos, e a coluna é limpa.
+2. **Classificações duplicadas:** quando a mesma evidência tem o mesmo item mais de uma vez, fica só a classificação mais recente.
+
+Avaliações antigas, criadas antes de existir `owner_id`, ficam **sem dono** e são visíveis apenas para ADMIN.
 
 ---
 
@@ -176,6 +219,7 @@ users            evaluations ──1:N──▶ evidences ──1:N──▶ cla
 - **Uso do token:** toda requisição protegida envia `Authorization: Bearer <token>`. No app, isso é feito automaticamente por `_AuthClient` em `api_service.dart`.
 - **Token:** assinado com HS256 usando `jwt.secret` (mínimo de **32 bytes**, senão a API não sobe). Validade de `jwt.expiration` (24 h).
 - **Rotas públicas:** só `POST /auth/register`, `POST /auth/login` e `/error`. Todas as outras respondem `401` sem token válido.
+- **Dono dos dados:** cada avaliação pertence ao usuário que a criou. Um `USER` só vê e altera as próprias avaliações, e as evidências, fotos e classificações delas. Um `ADMIN` vê todas, inclusive as antigas sem dono. Pedir um registro de outro usuário responde **`404`**, como se ele não existisse, para não revelar que existe.
 - **Senhas:** guardadas apenas como hash BCrypt. O login responde a mesma mensagem para e-mail inexistente e senha errada.
 - **Sem sessão/cookies:** a API é *stateless* e o CSRF fica desligado, porque a autenticação vai no header.
 - **CORS:** só importa para o Flutter **Web**, já que o app Android não passa por CORS. As origens permitidas são configuradas por perfil (ver [seção 8](#8-configuração-do-backend)).
@@ -195,23 +239,36 @@ URL base: `http://localhost:8080/api`. 🔓 = pública. Todas as outras exigem t
 | GET | `/auth/me` | Dados do usuário logado |
 
 ### Avaliações
+Só as do usuário logado (ADMIN: todas).
+
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/evaluations` | Cria (`visitorName`, `culturalSpaceName`, `spaceType`) |
-| GET | `/evaluations` | Lista todas |
+| POST | `/evaluations` | Cria (`visitorName`, `culturalSpaceName`, `spaceType`). O dono é o usuário logado |
+| GET | `/evaluations` | Lista, das mais recentes para as mais antigas |
 | GET | `/evaluations/{id}` | Busca uma |
 | GET | `/evaluations/status/in-progress` | Lista as em andamento |
-| PUT | `/evaluations/{id}/complete` | Marca como concluída |
-| DELETE | `/evaluations/{id}` | Apaga |
+| PUT | `/evaluations/{id}/complete` | Marca como concluída (bloqueia novas evidências) |
+| DELETE | `/evaluations/{id}` | Apaga a avaliação, com as evidências, fotos e classificações |
 
 ### Evidências
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/evidences` | Registra (`evaluationId`, `photoBase64`, `markX`, `markY`, `quickNote`) |
-| GET | `/evidences/evaluation/{evaluationId}` | Lista as evidências de uma avaliação (foto em `photoDataBase64`) |
+| POST | `/evidences` | Registra. Corpo **`multipart/form-data`**: `evaluationId`, `quickNote`, `markX` e `markY` (opcionais) e o arquivo **`photo`** |
+| GET | `/evidences/evaluation/{evaluationId}` | Lista as evidências de uma avaliação (sem a foto, só `hasPhoto`) |
 | GET | `/evidences/{id}` | Busca uma |
+| GET | `/evidences/{id}/photo` | **Bytes da foto** (`image/jpeg`, `image/png` ou `image/webp`) |
+| GET | `/evidences/{id}/classifications` | Classificações salvas da evidência |
+| PUT | `/evidences/{id}/classifications` | **Salva a classificação completa** (`comoItemIds`, `personalAnalysis`), substituindo a anterior. `[]` remove |
 | PUT | `/evidences/{id}/classify` | Marca como classificada |
-| DELETE | `/evidences/{id}` | Apaga a evidência e as classificações dela |
+| DELETE | `/evidences/{id}` | Apaga a evidência, a foto e as classificações dela |
+
+Exemplo de upload com `curl`:
+```bash
+curl -X POST http://localhost:8080/api/evidences \
+  -H "Authorization: Bearer <token>" \
+  -F evaluationId=1 -F "quickNote=letra pequena" -F markX=120 -F markY=80 \
+  -F "photo=@foto.jpg"
+```
 
 ### Itens COMO D'EU
 | Método | Rota | Descrição |
@@ -225,11 +282,21 @@ URL base: `http://localhost:8080/api`. 🔓 = pública. Todas as outras exigem t
 ### Classificações
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/classifications` | Cria (`evidenceId`, `comoItemId`, `personalAnalysis`) e marca a evidência como classificada |
+| POST | `/classifications` | Cria (`evidenceId`, `comoItemId`, `personalAnalysis`) e marca a evidência como classificada. Se a evidência já tiver esse item, só atualiza a análise |
 | GET | `/classifications/evidence/{evidenceId}` | Lista as classificações de uma evidência |
-| GET | `/classifications/item/{comoItemId}` | Lista as classificações de um item |
+| GET | `/classifications/item/{comoItemId}` | Lista as classificações de um item (só das avaliações do usuário) |
 | GET | `/classifications/{id}` | Busca uma |
-| DELETE | `/classifications/{id}` | Apaga |
+| DELETE | `/classifications/{id}` | Apaga. Se era a última, a evidência volta a *Registrada* |
+
+### Erros
+Todas as rotas respondem erros em JSON:
+
+| Código | Quando | Exemplo de corpo |
+|---|---|---|
+| `400` | Dados inválidos ou faltando, foto que não é imagem, evidência em avaliação concluída | `{"status":400,"error":"Dados inválidos","fields":{"visitorName":"..."}}` |
+| `401` | Sem token ou token inválido | — |
+| `404` | Registro inexistente **ou de outro usuário** | `{"status":404,"error":"Evidência não encontrada: 99"}` |
+| `413` | Foto maior que 10 MB | `{"status":413,"error":"Foto muito grande (máximo 10 MB)"}` |
 
 ### Swagger UI (perfil dev)
 - Interface: <http://localhost:8080/api/swagger-ui.html>
@@ -282,6 +349,7 @@ URL base: `http://localhost:8080/api`. 🔓 = pública. Todas as outras exigem t
 | `DB_URL` | não | `jdbc:postgresql://localhost:5432/comodeu` | URL JDBC |
 | `DB_USERNAME` | não | `postgres` | Usuário do banco |
 | `CORS_ALLOWED_ORIGINS` | não | vazio (nenhuma origem web) | Origens do Flutter Web, separadas por vírgula |
+| `PHOTOS_DIR` | não | `uploads/photos` | Pasta das fotos. **Em produção, use um disco persistente e inclua no backup** |
 | `SWAGGER_ENABLED` | não | `false` | Liga o Swagger UI |
 | `PORT` | não | `8080` | Porta HTTP |
 
@@ -317,10 +385,13 @@ No **Android Studio**, o `--dart-define` vai em *Run → Edit Configurations… 
 - `applicationId`: `com.comodeu.como_deu_app`.
 
 ### Dados salvos no aparelho
-`shared_preferences` guarda o token (`auth_token`) e o nome do usuário (`auth_user_name`). O logout apaga os dois.
+- `shared_preferences`: token (`auth_token`), nome (`auth_user_name`) e e-mail (`auth_user_email`) do usuário.
+- SQLite `comodeu_offline.db` (só fora do navegador): cache das listas e fotos, e as pendências do modo offline (ver [seção 3](#modo-offline-android)).
+
+O botão **Sair** apaga tudo isso. A sessão expirada apaga só o token e mantém as pendências.
 
 ### Dependências (`pubspec.yaml`)
-Em uso: `http`, `shared_preferences`, `image_picker`. Declaradas mas **ainda não usadas** no código: `provider`, `sqflite`, `path`, `image`, `flutter_svg`, `google_fonts`, `intl`, `uuid`.
+Em uso: `http`, `shared_preferences`, `image_picker`, `sqflite` e `path` (modo offline). Declaradas mas **ainda não usadas** no código: `provider`, `image`, `flutter_svg`, `google_fonts`, `intl`, `uuid`.
 
 ---
 
@@ -410,10 +481,10 @@ flutter build apk --release --dart-define=API_BASE_URL=https://<dominio-da-api>/
 
 ## 13. Limitações conhecidas
 
-- **Dados compartilhados entre usuários:** avaliações não têm dono (`userId`), então todo usuário logado vê e altera as avaliações de todos.
-- **Classificações duplicadas:** reabrir uma evidência já classificada e salvar de novo cria classificações repetidas.
-- **Funcionalidades só na API:** concluir avaliação, apagar evidência e ver classificações salvas existem como endpoints, mas ainda não têm tela no app.
-- **Erros genéricos:** registros inexistentes (ex.: evidência ou item com ID inválido) resultam em `500`, em vez de `404`.
-- **Fotos no banco:** imagens ficam em BYTEA no PostgreSQL e trafegam em Base64. Para grandes volumes, o ideal é guardar em um storage de arquivos.
-- **Sem modo offline:** o app depende da API para tudo. O `sqflite` está declarado, mas não é usado.
+- **Classificação exige conexão:** offline é possível registrar avaliações e evidências, mas não classificá-las.
+- **Offline só fora do navegador:** no Flutter Web não há modo offline.
+- **Sair apaga pendências:** o app avisa antes, mas itens não enviados são perdidos se o usuário confirmar.
+- **Fotos em disco local:** a pasta de fotos precisa estar num disco persistente e no backup. Para vários servidores, o ideal seria um storage compartilhado (ex.: S3).
+- **Marcação na foto:** `markX`/`markY` são coordenadas na tela de captura (área de 300 px de altura) e não são exibidas nas outras telas.
+- **Avaliações não podem ser apagadas pelo app:** só pela API (`DELETE /evaluations/{id}`).
 - **Sem testes automatizados** no backend e no frontend.

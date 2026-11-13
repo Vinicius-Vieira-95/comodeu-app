@@ -12,7 +12,7 @@ O avaliador visita um espaço cultural (museu, galeria, teatro, biblioteca) e:
 1. **Durante a visita:** fotografa um ponto do espaço, marca o elemento na foto com um toque e escreve uma nota rápida (ex.: "letra pequena").
 2. **Depois da visita:** abre cada evidência e a classifica em um ou mais dos **17 itens COMO D'EU**, escrevendo uma análise pessoal. O app sugere itens a partir das palavras da nota, mas todos os 17 ficam disponíveis para escolha.
 
-O acesso exige conta (cadastro e login com e-mail e senha).
+O acesso exige conta (cadastro e login com e-mail e senha), e cada usuário vê apenas as próprias avaliações. No Android, o registro funciona **sem internet**: avaliações e evidências ficam guardadas no aparelho e são enviadas quando a conexão voltar.
 
 ## Tecnologias
 
@@ -107,6 +107,7 @@ Em produção, defina as variáveis de ambiente antes de subir:
 $env:SPRING_PROFILES_ACTIVE = "prod"
 $env:DB_PASSWORD = "sua-senha-do-postgres"
 $env:JWT_SECRET  = "<segredo base64 com 32+ bytes>"
+$env:PHOTOS_DIR  = "D:\comodeu\fotos"   # pasta persistente para as fotos (incluir no backup)
 # opcionais: DB_URL (padrão jdbc:postgresql://localhost:5432/comodeu),
 #            DB_USERNAME (padrão postgres), CORS_ALLOWED_ORIGINS, SWAGGER_ENABLED, PORT
 ```
@@ -122,9 +123,11 @@ Todos sob `http://localhost:8080/api`. Exceto cadastro e login, todos exigem `Au
 |---|---|
 | Autenticação | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
 | Avaliações | `POST/GET /evaluations`, `GET /evaluations/{id}`, `PUT /evaluations/{id}/complete` |
-| Evidências | `POST /evidences`, `GET /evidences/evaluation/{evaluationId}` |
+| Evidências | `POST /evidences` (multipart, com o arquivo `photo`), `GET /evidences/evaluation/{evaluationId}`, `GET /evidences/{id}/photo`, `DELETE /evidences/{id}` |
+| Classificações | `GET/PUT /evidences/{id}/classifications` (salvar substitui a anterior, sem duplicar) |
 | Itens COMO D'EU | `GET /como-items`, `POST /como-items/suggest` |
-| Classificações | `POST /classifications`, `GET /classifications/evidence/{evidenceId}` |
+
+As fotos ficam em arquivos na pasta `PHOTOS_DIR` (padrão `backend/uploads/photos`), não no banco.
 
 Lista completa: [documentação, seção 7](docs/DOCUMENTACAO.md#7-api-rest) ou o Swagger.
 
@@ -156,12 +159,10 @@ Mais casos na [documentação](docs/DOCUMENTACAO.md#12-solução-de-problemas).
 
 ## 📝 Próximos Passos
 
-1. Vincular avaliações ao usuário que as criou
-2. Evitar classificações duplicadas ao reclassificar uma evidência
-3. Telas para concluir avaliação, apagar evidência e ver classificações salvas
-4. Modo offline com sincronização
-5. Relatórios e exportação em PDF
-6. Publicar na Play Store
+1. Classificar evidências também sem conexão
+2. Testes automatizados (backend e app)
+3. Relatórios e exportação em PDF
+4. Publicar na Play Store
 
 ---
 

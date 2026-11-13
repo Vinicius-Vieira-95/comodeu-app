@@ -27,3 +27,9 @@ server:
 
 jwt:
   expiration: 86400000  # 24 horas em ms
+
+app:
+  storage:
+    # Pasta onde as fotos das evidências são gravadas (relativa à pasta onde o backend roda).
+    # Em produção, aponte para um disco persistente: PHOTOS_DIR=/var/lib/comodeu/photos
+    photos-dir: ${PHOTOS_DIR:uploads/photos}

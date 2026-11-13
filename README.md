@@ -1,285 +1,167 @@
 # 📍 Aplicação COMO D'EU
 Solução tecnológica para avaliação de espaços culturais usando o instrumento COMO D'EU.
 
+📘 **Documentação completa (app, API e configurações):** [docs/DOCUMENTACAO.md](docs/DOCUMENTACAO.md)
+
+---
+
+## O que o app faz
+
+O avaliador visita um espaço cultural (museu, galeria, teatro, biblioteca) e:
+
+1. **Durante a visita:** fotografa um ponto do espaço, marca o elemento na foto com um toque e escreve uma nota rápida (ex.: "letra pequena").
+2. **Depois da visita:** abre cada evidência e a classifica em um ou mais dos **17 itens COMO D'EU**, escrevendo uma análise pessoal. O app sugere itens a partir das palavras da nota, mas todos os 17 ficam disponíveis para escolha.
+
+O acesso exige conta (cadastro e login com e-mail e senha).
+
+## Tecnologias
+
+| Parte | Tecnologia |
+|---|---|
+| `backend/` | API REST em Spring Boot 3.5 (Java 25, Gradle), Spring Security + JWT, Swagger |
+| `frontend/` | App Flutter/Dart (Android e Web) |
+| Banco | PostgreSQL (tabelas criadas automaticamente) |
+
 ## Estrutura do Projeto
 
 ```
 como-deu-app/
-├── backend/          # API Spring Boot (Java 25 + Gradle)
+├── backend/                 # API Spring Boot
 │   ├── build.gradle
-│   └── src/main/java/com/comodeu/
-│       ├── controller/       # REST Controllers
-│       ├── entity/           # JPA Entities
-│       ├── repository/       # Data Access
-│       ├── service/          # Business Logic
-│       ├── dto/              # Data Transfer Objects
-│       └── ComoDeUApiApplication.java
-│
-└── frontend/         # App Flutter/Dart
-    ├── pubspec.yaml
-    ├── lib/
-    │   ├── main.dart
-    │   ├── models/          # Data Models
-    │   ├── screens/         # UI Screens
-    │   ├── services/        # API Service
-    │   └── widgets/         # Reusable Components
-    └── test/
-
+│   ├── init-db.sql          # opcional: cria banco e tabelas manualmente
+│   └── src/main/
+│       ├── java/com/comodeu/
+│       │   ├── config/      # segurança, CORS, Swagger, admin de dev
+│       │   ├── controller/  # endpoints REST
+│       │   ├── dto/         # objetos de entrada/saída
+│       │   ├── entity/      # entidades JPA
+│       │   ├── repository/  # acesso a dados
+│       │   ├── security/    # JWT
+│       │   └── service/     # regras de negócio e sugestão de itens
+│       └── resources/       # application.yml, -dev.yml, -prod.yml
+├── frontend/                # App Flutter
+│   ├── pubspec.yaml
+│   └── lib/
+│       ├── main.dart
+│       ├── models/          # Evaluation, Evidence, ComoItem
+│       ├── screens/         # telas
+│       └── services/        # api_service.dart (HTTP + sessão)
+└── docs/
+    └── DOCUMENTACAO.md      # documentação completa
 ```
 
 ---
 
-## 🚀 Backend - Spring Boot
+## 🚀 Como rodar (desenvolvimento)
 
 ### Pré-requisitos
-- Java 25+
-- Gradle 8+
-- PostgreSQL 12+
+- Java 25 (o Gradle Wrapper já está no projeto)
+- PostgreSQL 12+ em `localhost:5432` (usuário/senha padrão: `postgres`/`postgres`)
+- Flutter 3 e Android Studio com um emulador
 
-### Instalação
+### 1. Criar o banco (só na primeira vez)
+```sql
+CREATE DATABASE comodeu;
+```
+As tabelas e os 17 itens COMO D'EU são criados automaticamente quando o backend sobe.
 
-1. **Entrar no diretório backend**
-   ```bash
-   cd backend
-   ```
+### 2. Backend
+```powershell
+cd backend
+./gradlew bootRun
+```
+- API: <http://localhost:8080/api>
+- Swagger: <http://localhost:8080/api/swagger-ui.html>
+- Usuário de teste criado automaticamente: `admin@comodeu.dev` / `admin123`
 
-2. **Configurar banco de dados**
-   ```sql
-   CREATE DATABASE comodeu;
-   ```
+Se o seu PostgreSQL usar outro usuário ou senha, defina `$env:DB_USERNAME` e `$env:DB_PASSWORD` antes de rodar.
 
-3. **Escolher o perfil**
-   - `dev` (padrão): usa o PostgreSQL local (`jdbc:postgresql://localhost:5432/comodeu`, usuário `postgres`, senha `postgres`). Para outros valores, defina `DB_URL`, `DB_USERNAME` e `DB_PASSWORD`.
-   - `prod`: usa PostgreSQL e exige estas variáveis de ambiente:
-     ```powershell
-     $env:SPRING_PROFILES_ACTIVE = "prod"
-     $env:DB_PASSWORD = "sua-senha-do-postgres"
-     $env:JWT_SECRET  = "<segredo base64 com 64+ caracteres>"
-     # opcionais: DB_URL (padrão jdbc:postgresql://localhost:5432/comodeu),
-     #            DB_USERNAME (padrão postgres), CORS_ALLOWED_ORIGINS
-     ```
-     Sem `DB_PASSWORD` ou `JWT_SECRET` a aplicação não sobe.
+### 3. App
+No **Android Studio**: abra a pasta `frontend`, selecione o emulador e clique em **Run ▶**.
 
-4. **Compilar e rodar**
-   ```bash
-   ./gradlew build
-   ./gradlew bootRun
-   ```
+Ou pelo terminal:
+```powershell
+cd frontend
+flutter pub get
+flutter run
+```
 
-   Ou com Gradle instalado:
-   ```bash
-   gradle bootRun
-   ```
+A URL da API é escolhida automaticamente: `10.0.2.2:8080` no emulador Android e `localhost:8080` no Chrome. Em um **celular físico**, informe o IP do PC:
+```powershell
+flutter run --dart-define=API_BASE_URL=http://<IP-do-PC>:8080/api
+```
 
-5. **API estará disponível em:**
-   - http://localhost:8080/api
-   - Documentação automática: http://localhost:8080/api/como-items/initialize
-
-### Endpoints Principais
-
-#### Evaluations
-- `POST /evaluations` - Criar nova avaliação
-- `GET /evaluations` - Listar todas
-- `GET /evaluations/{id}` - Obter uma específica
-- `PUT /evaluations/{id}/complete` - Marcar como completa
-
-#### Evidence
-- `POST /evidences` - Registrar evidência
-- `GET /evidences/evaluation/{evaluationId}` - Listar por avaliação
-- `PUT /evidences/{id}/classify` - Marcar como classificada
-
-#### COMO Items
-- `GET /como-items` - Listar todos os 17 itens
-- `POST /como-items/suggest` - Sugerir itens por keywords
-- `POST /como-items/initialize` - Inicializar dados
-
-#### Classifications
-- `POST /classifications` - Criar classificação
-- `GET /classifications/evidence/{evidenceId}` - Listar por evidência
+> 💡 Depois de alterar o código do app, use **Hot Restart** (⟳ / `R`). O Hot Reload (⚡ / `r`) às vezes mantém a versão antiga das telas.
 
 ---
 
-## 📱 Frontend - Flutter/Dart
+## ⚙️ Perfis de configuração
 
-### Pré-requisitos
-- Flutter 3.0+
-- Dart 3.0+
-- Android Studio / Xcode (para emulador)
-- VS Code ou Android Studio
+| Perfil | Como ativar | Observações |
+|---|---|---|
+| `dev` | padrão | PostgreSQL local, Swagger liberado, admin de teste criado |
+| `prod` | `$env:SPRING_PROFILES_ACTIVE = "prod"` | Exige `DB_PASSWORD` e `JWT_SECRET`. Swagger desligado |
 
-### Instalação
-
-1. **Entrar no diretório frontend**
-   ```bash
-   cd frontend
-   ```
-
-2. **Instalar dependências**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Verificar dispositivos**
-   ```bash
-   flutter devices
-   ```
-
-4. **Rodar a aplicação**
-   ```bash
-   flutter run
-   ```
-
-   Ou em um emulador específico:
-   ```bash
-   flutter run -d emulator-5554
-   ```
-
-### Estrutura das Screens
-
-1. **HomeScreen** - Lista avaliações e botão para nova
-2. **EvaluationFormScreen** - Formulário de dados da visita
-3. **CaptureScreen** - Captura foto, marca elemento e registra nota rápida
-4. **GalleryScreen** - Grid com miniaturas das evidências
-5. **ClassificationScreen** - Classifica evidência com sugestões automáticas
+Em produção, defina as variáveis de ambiente antes de subir:
+```powershell
+$env:SPRING_PROFILES_ACTIVE = "prod"
+$env:DB_PASSWORD = "sua-senha-do-postgres"
+$env:JWT_SECRET  = "<segredo base64 com 32+ bytes>"
+# opcionais: DB_URL (padrão jdbc:postgresql://localhost:5432/comodeu),
+#            DB_USERNAME (padrão postgres), CORS_ALLOWED_ORIGINS, SWAGGER_ENABLED, PORT
+```
+Sem `DB_PASSWORD` ou `JWT_SECRET`, a aplicação não sobe. A lista completa de propriedades e variáveis está na [documentação](docs/DOCUMENTACAO.md#8-configuração-do-backend).
 
 ---
 
-## 🔄 Fluxo de Uso
+## 🔌 Endpoints principais
 
-### Durante a Visita (Fase Rápida - ~15 seg por item)
-1. Abrir app na tela "Registrar Evidência"
-2. Tirar foto do elemento problemático
-3. Marcar a localização na foto com um toque
-4. Escrever nota rápida (ex: "letra pequena")
-5. Clicar "Registrar" e continuar visitando
+Todos sob `http://localhost:8080/api`. Exceto cadastro e login, todos exigem `Authorization: Bearer <token>`.
 
-### Após a Visita (Fase Análise - ~2 min por item)
-1. Ir para aba "Galeria"
-2. Clicar em uma evidência para detalhe
-3. App mostra:
-   - Foto com marca
-   - Nota original
-   - 2-3 itens COMO D'EU sugeridos (selecionados por padrão)
-4. Aluno pode:
-   - Confirmar seleção ou adicionar/remover itens
-   - Escrever análise pessoal detalhada
-5. Clicar "Salvar Classificação"
+| Recurso | Endpoints |
+|---|---|
+| Autenticação | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
+| Avaliações | `POST/GET /evaluations`, `GET /evaluations/{id}`, `PUT /evaluations/{id}/complete` |
+| Evidências | `POST /evidences`, `GET /evidences/evaluation/{evaluationId}` |
+| Itens COMO D'EU | `GET /como-items`, `POST /como-items/suggest` |
+| Classificações | `POST /classifications`, `GET /classifications/evidence/{evidenceId}` |
+
+Lista completa: [documentação, seção 7](docs/DOCUMENTACAO.md#7-api-rest) ou o Swagger.
 
 ---
 
-## 📊 Dados dos 17 Itens COMO D'EU
+## 📊 Os 17 itens COMO D'EU
 
-### Categoria 1: Acessibilidade & Conforto
-1. Acessibilidade Física
-2. Conforto Térmico
-3. Conforto Acústico
-4. Qualidade da Iluminação
-5. Mobiliário Apropriado
-
-### Categoria 2: Informação & Comunicação
-6. Sinalização Clara
-7. Informações Legíveis
-8. Acesso à Informação
-9. Comodidades Gerais
-
-### Categoria 3: Experiência & Engajamento
-10. Clareza Expositiva
-11. Engajamento do Visitante
-12. Diversidade de Conteúdo
-
-### Categoria 4: Segurança & Recursos
-13. Segurança e Privacidade
-14. Gestão do Tempo
-15. Qualidade do Atendimento
-16. Recursos Educacionais
-17. Impressão Geral / Satisfação
+| Categoria | Itens |
+|---|---|
+| Acessibilidade & Conforto | 1. Acessibilidade Física · 2. Conforto Térmico · 3. Conforto Acústico · 4. Qualidade da Iluminação · 5. Mobiliário Apropriado |
+| Informação & Comunicação | 6. Sinalização Clara · 7. Informações Legíveis · 8. Acesso à Informação · 9. Comodidades Gerais |
+| Experiência & Engajamento | 10. Clareza Expositiva · 11. Engajamento do Visitante · 12. Diversidade de Conteúdo |
+| Segurança & Recursos | 13. Segurança e Privacidade · 14. Gestão do Tempo · 15. Qualidade do Atendimento · 16. Recursos Educacionais · 17. Impressão Geral / Satisfação |
 
 ---
 
-## 🔌 Integração API ↔ App
+## 🐛 Problemas comuns
 
-### Fluxo de Dados
+| Sintoma | Solução |
+|---|---|
+| Mudança no app não aparece | Stop ■ → Run ▶ no Android Studio (ou `flutter clean` e rodar de novo) |
+| App não conecta à API | Confirme que o backend está em `:8080`. Em celular físico, use `--dart-define=API_BASE_URL` |
+| Backend não conecta ao banco | Verifique se o PostgreSQL está rodando, se o banco `comodeu` existe e as variáveis `DB_*` |
+| App volta para o login | O token expirou (24 h): entre novamente |
 
-1. **App cria Avaliação** → Backend salva em PostgreSQL
-2. **App captura Foto** → Base64 enviado ao Backend
-3. **App registra Evidência** → Backend armazena foto + marca + nota
-4. **App pede Sugestões** → Backend analisa keywords e retorna top 3
-5. **App classifica** → Backend cria registro de classificação
-
-### Persistência
-- **Backend**: PostgreSQL (produção)
-- **App**: SQLite local + sincronização quando conectado
-
----
-
-## 🛠️ Customizações
-
-### Alterar URL da API
-**Em `frontend/lib/services/api_service.dart`:**
-```dart
-static const String baseUrl = 'http://192.168.1.100:8080/api';
-```
-
-### Adicionar Autenticação
-1. Implementar JWT no Backend
-2. Armazenar token em SharedPreferences no App
-3. Adicionar token aos headers da API
-
-### Suportar Cloud Storage
-1. Integrar AWS S3 ou Firebase Storage
-2. Armazenar apenas URL no BD (não base64)
-
----
-
-## 📋 Checklist de Deployment
-
-### Backend
-- [ ] Mude `ddl-auto` para `validate` em produção
-- [ ] Crie migration scripts com Flyway
-- [ ] Configure HTTPS
-- [ ] Ajuste JWT secret em produção
-- [ ] Defina limites de upload (max-file-size)
-
-### App
-- [ ] Change `baseUrl` para produção
-- [ ] Configure signing para release
-- [ ] Teste em múltiplos devices
-- [ ] Configure App Signing no Google Play
-
----
-
-## 🐛 Troubleshooting
-
-### Backend não conecta ao banco
-```
-Error: could not connect to database
-```
-**Solução:** Verifique se PostgreSQL está rodando e credenciais em `application.yml`
-
-### App não conecta à API
-```
-SocketException: Failed to connect
-```
-**Solução:** 
-- Verifique se Backend está rodando
-- Teste URL em postman/curl
-- Confirme firewall não bloqueia porta 8080
-
-### Fotos não salva
-```
-Exception during binary read
-```
-**Solução:** Verifique permissões de câmera no App
+Mais casos na [documentação](docs/DOCUMENTACAO.md#12-solução-de-problemas).
 
 ---
 
 ## 📝 Próximos Passos
 
-1. Implementar autenticação de usuários
-2. Adicionar offline-sync automática
-3. Criar dashboard com relatórios
-4. Integrar com Google/Facebook login
-5. Publicar na App Store e Play Store
+1. Vincular avaliações ao usuário que as criou
+2. Evitar classificações duplicadas ao reclassificar uma evidência
+3. Telas para concluir avaliação, apagar evidência e ver classificações salvas
+4. Modo offline com sincronização
+5. Relatórios e exportação em PDF
+6. Publicar na Play Store
 
 ---
 
